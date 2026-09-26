@@ -1,0 +1,32 @@
+[project]
+name = "mlflow-registry"
+version = "0.1.0"
+description = "MLflow model registry client: register, promote by alias, resolve, download"
+readme = "README.md"
+authors = [
+    { name = "mike", email = "anhduc22601@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "boto3>=1.43.92",
+    "mlflow>=3.16.0",
+    "numpy>=2.5.3",
+    "python-dotenv>=1.2.3",
+    "scikit-learn>=1.9.1",
+]
+
+[project.scripts]
+mlflow-registry = "mlflow_registry.cli:main"
+
+[project.optional-dependencies]
+hf = ["huggingface_hub>=0.30"]
+
+[dependency-groups]
+dev = ["pytest>=9"]
+
+[build-system]
+requires = ["uv_build>=0.12.9,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

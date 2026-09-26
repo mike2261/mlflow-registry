@@ -1,0 +1,12 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+
+# MLflow local fallback store
+mlflow.db
+mlruns/
+mlartifacts/
+.pytest_cache/
+register.log
