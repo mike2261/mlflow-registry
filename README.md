@@ -14,7 +14,8 @@ Three pieces live here:
 | **CLI** | `mlflow-registry register / promote / resolve / download / list` | `src/mlflow_registry/cli.py` |
 
 Plus `scripts/register_shortlist.py`, which registers the nine shortlisted models from the
-research report in `reports/`.
+research report in `reports/`, and a **serving layer** (section 5): a pyfunc wrapper per model,
+one Docker image per model, `mlflow models serve` behind `POST /invocations`.
 
 ---
 
@@ -253,7 +254,110 @@ the name and alias in the serving config.
 
 ---
 
-## 5. Development
+## 5. Serving over REST (`mlflow models serve`)
+
+The registry stores raw snapshots, and `mlflow models serve` needs a `python_function` flavor.
+So every model also has a **version 2: a pyfunc wrapper** (a few KB) that points at the raw
+weights version, downloads them at load time, and runs them with the model's own runtime.
+The alias **`serving`** always points at the current wrapper; `production` / `staging` stay
+reserved for raw weights, so nothing in section 4 changes.
+
+```
+whisper-large-v3
+  v1  raw weights   (hf snapshot)            ← production / staging live here
+  v2  pyfunc wrapper flavor=pyfunc wraps_version=1 task=stt serving_port=5005
+  alias serving → 2
+
+  container serve-whisper-large-v3:  mlflow models serve -m models:/whisper-large-v3@serving
+        load_context → download models:/whisper-large-v3/1 into /models (shared volume)
+        POST /invocations  {"dataframe_records":[{"audio_b64": "...", "language": "vi"}]}
+```
+
+### Layout
+
+| Piece | Where |
+|---|---|
+| Wrappers (`SttModel` / `TtsModel` + one module per runtime) | `src/mlflow_registry/serving/` |
+| Catalog: name → wrapper, host port, GPU | `src/mlflow_registry/serving/catalog.py` |
+| Register the `@serving` versions | `scripts/register_serving.py` |
+| Shared CUDA base image + thin per-model image | `serving/Dockerfile.base`, `serving/Dockerfile.model`, `serving/requirements/<name>.txt` |
+| One compose service per model (generated) | `docker-compose.serving.yaml` ← `scripts/gen_compose.py` |
+| Start / stop / logs | `scripts/serve.sh` |
+| Client | `scripts/invoke.py` |
+
+Same pattern as robo-be's sidecars: one base image with CUDA + torch, one thin image per model
+because the runtimes pin incompatible `transformers` versions. Weights are **not** baked into
+images; the first start downloads them from MLflow into the `serving_models` volume.
+
+### Ports and REST contract
+
+| Model | Task | Port | Request columns | Notes |
+|---|---|---|---|---|
+| `qwen3-asr-1.7b` | STT | 5001 | `audio_b64`, `language?` | vi / en / auto |
+| `granite-speech-4.1-2b` | STT | 5002 | `audio_b64` | English |
+| `gipformer1.5-68m-rnnt` | STT | 5003 | `audio_b64` | Vietnamese, CPU (sherpa-onnx) |
+| `parakeet-ctc-0.6b-vietnamese` | STT | 5004 | `audio_b64` | Vietnamese, NeMo |
+| `whisper-large-v3` | STT | 5005 | `audio_b64`, `language?` | multilingual |
+| `voxcpm2` | TTS | 5006 | `text`, `voice?` (description), `ref_audio_b64?`, `ref_text?` | 48 kHz |
+| `vieneu-tts-v3-turbo` | TTS | 5007 | `text`, `voice?` (preset, e.g. `Mai Anh`), `ref_audio_b64?` | 48 kHz |
+| `kokoro-82m` | TTS | 5008 | `text`, `voice?` (`af_heart`, `bm_george`, …) | 24 kHz |
+| `qwen3-tts-1.7b-base` | TTS | 5009 | `text`, `ref_audio_b64` **required**, `ref_text?`, `language?` | clone-only base model |
+
+Audio goes in and out as **base64 WAV** (any libsndfile format in; 16-bit PCM WAV out).
+STT returns `{"text", "language"}`, TTS returns `{"audio_b64", "sample_rate"}`:
+
+```bash
+# STT
+curl -s localhost:5005/invocations -H 'Content-Type: application/json' \
+  -d "{\"dataframe_records\":[{\"audio_b64\":\"$(base64 -w0 clip.wav)\",\"language\":\"vi\"}]}"
+# → {"predictions":[{"text":"...","language":"vi"}]}
+
+# TTS
+curl -s localhost:5008/invocations -H 'Content-Type: application/json' \
+  -d '{"dataframe_records":[{"text":"Hello from the registry","voice":"af_heart"}]}' \
+  | python -c 'import sys,json,base64;p=json.load(sys.stdin)["predictions"][0];open("out.wav","wb").write(base64.b64decode(p["audio_b64"]))'
+
+# or the bundled client (looks the port up in the catalog)
+uv run python scripts/invoke.py stt whisper-large-v3 clip.wav --language vi
+uv run python scripts/invoke.py tts kokoro-82m "Hello from the registry" --voice af_heart --out out.wav
+```
+
+`GET /health` answers once the model is loaded; `GET /version` gives the MLflow version.
+
+### Bring a model up
+
+```bash
+uv run python scripts/register_serving.py            # once per registry: creates v2 + alias serving (all nine)
+scripts/serve.sh build-base                          # once per machine: CUDA 12.8 + torch 2.8 + mlflow (~8 GB)
+scripts/serve.sh up kokoro-82m                       # builds the thin image, starts it, prints the URL
+scripts/serve.sh logs kokoro-82m                     # first start downloads the weights, then "Uvicorn running"
+scripts/serve.sh health kokoro-82m
+scripts/serve.sh down kokoro-82m
+```
+
+Under the hood: `docker compose -f docker-compose.yaml -f docker-compose.serving.yaml --profile <name> up -d serve-<name>`.
+Every model is its own compose **profile**, so a plain `docker compose up -d` still starts only the
+registry. Inside the compose network the tracking URI is `http://mlflow:5000`, where MinIO's presigned
+URLs resolve, so the proxy-multipart workaround from section 2 is not needed there.
+
+**VRAM.** The 3090 has 24 GB; the nine models resident together need roughly 28 GB, so do not start
+them all. Rough per-model needs: qwen3-asr 5 GB, granite 6 GB, whisper 4 GB, parakeet 2 GB, voxcpm2 8 GB,
+qwen3-tts 5 GB, vieneu 1 GB, kokoro <1 GB, gipformer 0 (CPU). Typical sets: *all STT* (~17 GB) or
+*all TTS* (~15 GB).
+
+**Runtime caveats.** `qwen3-tts-1.7b-base` is a clone-only checkpoint and refuses requests without
+`ref_audio_b64`. `vieneu` downloads its MOSS audio tokenizer from Hugging Face on first start
+(cached under `/models/.hf`). Set `GIPFORMER_QUANTIZE=int8` on the gipformer service for the smaller
+int8 graphs, `VOXCPM_COMPILE=true` to enable torch.compile in VoxCPM.
+
+**Changing a wrapper.** Wrapper classes are pickled *by reference*, so the code that runs is whatever
+the image contains: rebuild the image (`serve.sh build NAME`) and restart. Re-run
+`register_serving.py` only when the request/response signature or the wrapped weights version changes.
+Edit the catalog, then `uv run python scripts/gen_compose.py`; a test fails if the compose file is stale.
+
+---
+
+## 6. Development
 
 ```bash
 uv sync --group dev --extra hf       # deps (+ huggingface_hub for hf: specs)
