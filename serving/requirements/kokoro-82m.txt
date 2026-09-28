@@ -1,0 +1,3 @@
+# kokoro-82m: kokoro (StyleTTS2) + misaki G2P; espeak-ng comes from the base image.
+kokoro==0.9.4
+soundfile

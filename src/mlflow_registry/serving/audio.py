@@ -7,8 +7,12 @@ hand back (samples, sample_rate) which we encode as 16-bit PCM WAV.
 
 import base64
 import binascii
+import contextlib
 import io
 import math
+import os
+import tempfile
+from collections.abc import Iterator
 
 import numpy as np
 import soundfile as sf
@@ -68,3 +72,22 @@ def encode_b64(samples: np.ndarray, sample_rate: int) -> str:
     buf = io.BytesIO()
     sf.write(buf, arr, int(sample_rate), format="WAV", subtype="PCM_16")
     return base64.b64encode(buf.getvalue()).decode("ascii")
+
+
+@contextlib.contextmanager
+def temp_wav(samples: np.ndarray, sample_rate: int) -> Iterator[str]:
+    """Write ``samples`` to a temporary WAV file and yield its path.
+
+    Several runtimes (NeMo, VoxCPM, VieNeu) only accept file paths for audio.
+    The file is removed when the block exits.
+    """
+    fd, path = tempfile.mkstemp(suffix=".wav")
+    os.close(fd)
+    try:
+        sf.write(path, np.asarray(samples, dtype=np.float32), int(sample_rate), subtype="PCM_16")
+        yield path
+    finally:
+        try:
+            os.unlink(path)
+        except FileNotFoundError:
+            pass

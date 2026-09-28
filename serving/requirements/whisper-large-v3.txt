@@ -1,0 +1,5 @@
+# whisper-large-v3: transformers ASR pipeline.
+transformers>=4.57,<6
+accelerate
+soundfile
+librosa
