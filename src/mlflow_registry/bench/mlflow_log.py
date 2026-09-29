@@ -10,7 +10,8 @@ from mlflow_registry.bench.score import Cell, cost_per_min, slices
 
 EXPERIMENT = "eval-stt"
 
-_AGG_FIELDS = ("wer", "cer", "exact_rate", "en_recall", "rtf", "latency_median_s", "latency_p90_s",
+_AGG_FIELDS = ("wer", "cer", "wer_mean", "exact_rate", "en_recall", "cs_pass_rate", "rtf",
+               "latency_mean_s", "latency_median_s", "latency_p95_s", "latency_min_s", "latency_max_s",
                "failures", "n", "ref_words", "word_edits")
 
 

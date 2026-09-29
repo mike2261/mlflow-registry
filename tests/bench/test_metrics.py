@@ -66,12 +66,56 @@ def test_latency_stats_and_rtf():
             for i, lat in enumerate([0.1, 0.2, 0.3, 0.4, 1.0])]
     agg = metrics.aggregate(rows)
     assert agg.latency_median_s == pytest.approx(0.3)
-    assert agg.latency_p90_s == pytest.approx(1.0)
     assert agg.audio_s == pytest.approx(10.0)
     assert agg.rtf == pytest.approx(2.0 / 10.0)
+
+
+def test_latency_stats_follow_robo_be_mean_median_p95_min_max():
+    rows = [metrics.scored(_utt(i, "anh em"), "anh em", None, lat)
+            for i, lat in enumerate([0.1, 0.2, 0.3, 0.4, 1.0])]
+    agg = metrics.aggregate(rows)
+    assert agg.latency_mean_s == pytest.approx(0.4)
+    assert agg.latency_median_s == pytest.approx(0.3)
+    # robo-be _percentile: linear interpolation, k = (n-1) * 0.95 = 3.8 -> 0.4 + 0.6 * 0.8
+    assert agg.latency_p95_s == pytest.approx(0.88)
+    assert agg.latency_min_s == pytest.approx(0.1)
+    assert agg.latency_max_s == pytest.approx(1.0)
+
+
+def test_p95_of_one_value_is_that_value():
+    assert metrics.p95([0.7]) == pytest.approx(0.7)
+    assert metrics.p95([]) is None
+
+
+def test_mean_wer_is_bench_stt_average_of_per_utterance_rates():
+    # 13 perfect two-word utterances + one six-word utterance with two errors:
+    # bench_stt's wer_mean = (0 * 13 + 2/6) / 14
+    rows = [metrics.scored(_utt(i, "anh em"), "anh em", None, 0.5) for i in range(13)]
+    rows.append(metrics.scored(_utt(13, "a rolling stone gathers no moss", "en"),
+                               "a rolling stone gathers", None, 0.5))
+    rows.append(metrics.scored(_utt(14, "cảm ơn"), None, "BackendError: 500", None))  # excluded
+    agg = metrics.aggregate(rows)
+    assert agg.wer_mean == pytest.approx((2 / 6) / 14)
+    assert agg.wer == pytest.approx(2 / 32)                     # pooled is unchanged
+
+
+def test_code_switch_pass_is_all_or_nothing_and_vacuous_without_en_words():
+    good = _utt(1, "good morning", "en", en_words=("good", "morning"))
+    rows = [
+        metrics.scored(_utt(0, "anh em"), "anh em", None, 0.1),     # no en_words: passes (robo-be)
+        metrics.scored(good, "Good morning!", None, 0.1),            # every English word: passes
+        metrics.scored(good, "good mó ninh", None, 0.1),             # 1 of 2: fails, recall 1/2
+        metrics.scored(good, None, "BackendError: 500", None),       # failure: excluded
+    ]
+    assert [r.cs_pass for r in rows[:3]] == [True, True, False]
+    agg = metrics.aggregate(rows)
+    assert (agg.cs_pass, agg.cs_n) == (2, 3)
+    assert agg.cs_pass_rate == pytest.approx(2 / 3)
+    assert agg.en_recall == pytest.approx(3 / 4)
 
 
 def test_aggregate_of_nothing_has_none_rates():
     agg = metrics.aggregate([])
     assert agg.n == 0 and agg.wer is None and agg.cer is None and agg.rtf is None
     assert agg.latency_median_s is None and agg.en_recall is None
+    assert agg.wer_mean is None and agg.cs_pass_rate is None and agg.latency_p95_s is None

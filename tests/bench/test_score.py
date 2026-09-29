@@ -185,3 +185,76 @@ def test_detail_table_shows_detected_language(tmp_path):
     text = score.render_report(_META, UTTS, cells, [])
     assert "| Utt | Ref | Hyp | Lang | WER | Latency |" in text
     assert "| 00 | anh em | anh em | ko |" in text
+
+
+# --- robo-be parity ------------------------------------------------------------------------
+
+def _cell_from(system, condition, rows):
+    from mlflow_registry.bench.metrics import scored
+    return score.Cell(system, condition, [scored(u, h, e, lat) for u, h, e, lat in rows],
+                      passes=1, requests=len(rows), failed_requests=sum(1 for _, _, e, _ in rows if e))
+
+
+EN = Utterance("13", "13.wav", "good morning", "en", "en_short", ("good", "morning"), 0.5)
+VI = Utterance("00", "00.wav", "anh em", "vi", "vi_short", (), 1.0)
+
+
+def test_summary_has_mean_wer_cs_pass_and_p95_columns(tmp_path):
+    _, records = score.load_run(_write_run(tmp_path))
+    cells = [c for c in score.build_cells(records, UTTS) if c.condition == "hinted"]
+    text = score.render_report(_META, UTTS, cells, [])
+    header = next(line for line in text.splitlines() if line.startswith("| System | In-domain WER"))
+    for col in ("Mean WER", "CS pass", "Median latency", "p95"):
+        assert col in header
+    gip = next(line for line in text.splitlines() if line.startswith("| gipformer1.5-68m-rnnt |"))
+    assert "66.7% (2/3)" in gip          # CS pass: two vi rows pass vacuously, "gút mó ninh" fails
+
+
+def test_latency_table_has_robo_be_statistics(tmp_path):
+    _, records = score.load_run(_write_run(tmp_path))
+    cells = [c for c in score.build_cells(records, UTTS) if c.condition == "hinted"]
+    text = score.render_report(_META, UTTS, cells, [])
+    assert "### Latency: hinted" in text
+    assert "| System | mean | median | p95 | min | max |" in text
+
+
+def test_category_winner_code_switch_dominates_then_mean_wer_then_tie():
+    a = _cell_from("qwen3-asr-1.7b", "hinted", [(EN, "good morning", None, 0.1), (VI, "anh em", None, 0.1)])
+    b = _cell_from("whisper-large-v3", "hinted", [(EN, "good mó ninh", None, 0.1), (VI, "anh em", None, 0.1)])
+    c = _cell_from("gipformer1.5-68m-rnnt", "hinted", [(EN, "good morning", None, 0.1), (VI, "anh", None, 0.1)])
+    winners = score.category_winners([a, b, c])
+    # en_short: gipformer is out of domain (vi only) and excluded; qwen passes code-switch, whisper does not
+    assert winners["en_short"] == ["qwen3-asr-1.7b"]
+    # vi_short: qwen and whisper both 0 WER -> tie; gipformer 50 % loses
+    assert winners["vi_short"] == ["qwen3-asr-1.7b", "whisper-large-v3"]
+
+
+def test_category_winner_code_switch_beats_lower_wer():
+    long_en = Utterance("17", "17.wav", "a rolling stone gathers no moss", "en", "en_medium",
+                        ("rolling", "stone"), 2.0)
+    passer = _cell_from("qwen3-asr-1.7b", "hinted", [(long_en, "a rolling stone gather know moss", None, 0.1)])
+    lower_wer = _cell_from("whisper-large-v3", "hinted", [(long_en, "a rolling stun gathers no moss", None, 0.1)])
+    assert score.category_winners([passer, lower_wer])["en_medium"] == ["qwen3-asr-1.7b"]
+
+
+def test_report_lists_category_winners(tmp_path):
+    _, records = score.load_run(_write_run(tmp_path))
+    cells = [c for c in score.build_cells(records, UTTS) if c.condition == "hinted"]
+    text = score.render_report(_META, UTTS, cells, [])
+    assert "### Category winners: hinted" in text
+    assert "| vi_short |" in text
+
+
+def test_comparison_puts_datasets_side_by_side():
+    clean = [_cell_from("qwen3-asr-1.7b", "hinted", [(VI, "anh em", None, 0.1), (EN, "good morning", None, 0.1)])]
+    opus = [_cell_from("qwen3-asr-1.7b", "hinted", [(VI, "anh", None, 0.2), (EN, "good morning", None, 0.2)])]
+    text = score.render_comparison([
+        ("clean", {"dataset": "stt-fixtures", "dataset_hash": "sha256:aa"}, clean),
+        ("opus24", {"dataset": "stt-fixtures-opus24", "dataset_hash": "sha256:bb"}, opus),
+    ])
+    assert "# STT evaluation: clean vs opus24" in text
+    assert "## hinted" in text
+    header = next(line for line in text.splitlines() if line.startswith("| System |"))
+    assert "clean WER" in header and "opus24 WER" in header and "Δ WER" in header
+    row = next(line for line in text.splitlines() if line.startswith("| qwen3-asr-1.7b |"))
+    assert "0.0% (0/4)" in row and "25.0% (1/4)" in row and "+25.0 pp" in row

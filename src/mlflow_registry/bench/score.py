@@ -131,22 +131,77 @@ def _cell(text: str) -> str:
     return text.replace("|", "\\|").replace("\n", " ")
 
 
+def _frac(x: float | None) -> str:
+    return f"{100 * x:.1f}%" if x is not None else "n/a"
+
+
 def _summary_table(cells: list[Cell]) -> list[str]:
-    lines = ["| System | In-domain WER | CER | Exact | EN recall | Median latency | p90 | RTF | "
-             "Failed utts (pass 1) | $/min | Failed requests (all passes) |",
-             "|---|---|---|---|---|---|---|---|---|---|---|"]
+    lines = ["| System | In-domain WER | Mean WER | CER | Exact | EN recall | CS pass | Median latency | p95 | "
+             "RTF | Failed utts (pass 1) | $/min | Failed requests (all passes) |",
+             "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for cell in cells:
         sl = slices(cell)
         d, a = sl["in_domain"], sl["all"]
         cost = cost_per_min(cell.system)
         lines.append(
-            f"| {cell.system} | {_pct(d.word_edits, d.ref_words)} | {_pct(d.char_edits, d.ref_chars)} | "
-            f"{_pct(d.exact, d.n)} | {_pct(a.en_hits, a.en_total)} | {_sec(a.latency_median_s)} | "
-            f"{_sec(a.latency_p90_s)} | {_rate(a.rtf)} | {a.failures}/{a.n} | "
+            f"| {cell.system} | {_pct(d.word_edits, d.ref_words)} | {_frac(d.wer_mean)} | "
+            f"{_pct(d.char_edits, d.ref_chars)} | {_pct(d.exact, d.n)} | {_pct(a.en_hits, a.en_total)} | "
+            f"{_pct(a.cs_pass, a.cs_n)} | {_sec(a.latency_median_s)} | {_sec(a.latency_p95_s)} | "
+            f"{_rate(a.rtf)} | {a.failures}/{a.n} | "
             f"{'$' + format(cost, '.3f') if cost is not None else '—'} | "
             f"{cell.failed_requests}/{cell.requests} |"
         )
     return lines
+
+
+def _latency_table(cells: list[Cell], condition: str) -> list[str]:
+    lines = [f"### Latency: {condition}", "",
+             "Per utterance, median over passes; statistics as in robo-be's bench_tts.py.", "",
+             "| System | mean | median | p95 | min | max |", "|---|---|---|---|---|---|"]
+    for cell in cells:
+        a = slices(cell)["all"]
+        lines.append(f"| {cell.system} | {_sec(a.latency_mean_s)} | {_sec(a.latency_median_s)} | "
+                     f"{_sec(a.latency_p95_s)} | {_sec(a.latency_min_s)} | {_sec(a.latency_max_s)} |")
+    return lines + [""]
+
+
+def category_winners(cells: list[Cell]) -> dict[str, list[str]]:
+    """robo-be bench_stt's ``_category_winner``, generalised from two systems to N.
+
+    Per category, only systems that claim the category's language compete. If any of them
+    passes the code-switch check on every utterance and others do not, only the passers stay
+    in ("code-switch dominates"). Then the lowest mean per-utterance WER wins; equal values tie.
+    """
+    out: dict[str, list[str]] = {}
+    categories = sorted({r.utt.category for c in cells for r in c.rows})
+    for cat in categories:
+        entries = []
+        for cell in cells:
+            rows = [r for r in in_domain(cell) if r.utt.category == cat]
+            if not rows:
+                continue
+            agg = aggregate(rows)
+            if agg.wer_mean is not None:
+                entries.append((cell.system, agg.cs_pass_rate, agg.wer_mean))
+        if any(cs == 1.0 for _, cs, _ in entries) and any(cs is not None and cs < 1.0 for _, cs, _ in entries):
+            entries = [e for e in entries if e[1] == 1.0]
+        if not entries:
+            out[cat] = []
+            continue
+        best = min(w for _, _, w in entries)
+        out[cat] = sorted(s for s, _, w in entries if w == best)
+    return out
+
+
+def _winner_table(cells: list[Cell], condition: str) -> list[str]:
+    lines = [f"### Category winners: {condition}", "",
+             "robo-be rule: among systems that support the category's language, code-switch pass "
+             "dominates, then lower mean per-utterance WER; equal values tie.", "",
+             "| Category | Winner |", "|---|---|"]
+    for cat, names in category_winners(cells).items():
+        label = " = ".join(names) if names else "—"
+        lines.append(f"| {cat} | {label}{' (tie)' if len(names) > 1 else ''} |")
+    return lines + [""]
 
 
 def _slice_table(cells: list[Cell], prefix: str, title: str) -> list[str]:
@@ -185,9 +240,14 @@ def render_report(meta: dict, utts: list[Utterance], cells: list[Cell],
         if not group:
             continue
         out += [f"## Summary: {condition}", "",
-                "In-domain = utterances in a language the system claims to support. "
-                "Latency, RTF and failures are over all utterances.", ""]
+                "In-domain = utterances in a language the system claims to support. In-domain WER is "
+                "pooled (as robo-be bench_wer.py); Mean WER is the mean of per-utterance WER (as "
+                "bench_stt.py). CS pass = every expected English word present, vacuously true for "
+                "utterances without English (as bench_stt.py). EN recall, CS pass, latency, RTF and "
+                "failures are over all utterances.", ""]
         out += _summary_table(group) + [""]
+        out += _latency_table(group, condition)
+        out += _winner_table(group, condition)
         out += _slice_table(group, "lang:", "language")
         out += _slice_table(group, "cat:", "category")
 
@@ -210,6 +270,48 @@ def render_report(meta: dict, utts: list[Utterance], cells: list[Cell],
     else:
         out.append("None: every system produced identical text across passes.")
     out.append("")
+    return "\n".join(out)
+
+
+def _pp(a: Aggregate, b: Aggregate) -> str:
+    if a.wer is None or b.wer is None:
+        return "n/a"
+    return f"{100 * (b.wer - a.wer):+.1f} pp"
+
+
+def render_comparison(runs: list[tuple[str, dict, list[Cell]]]) -> str:
+    """Side-by-side in-domain metrics for the same systems on several datasets.
+
+    ``runs`` is ``[(label, run_meta, cells), ...]``; the first is the baseline for the Δ column.
+    """
+    labels = [label for label, _, _ in runs]
+    out = [f"# STT evaluation: {' vs '.join(labels)}", ""]
+    out += [f"- `{label}`: dataset `{meta['dataset']}` `{meta['dataset_hash']}`" for label, meta, _ in runs]
+    out += ["", f"Δ WER is each dataset's pooled in-domain WER minus `{labels[0]}`'s.", ""]
+    for condition in ("hinted", "auto"):
+        per_run = [{c.system: c for c in cells if c.condition == condition} for _, _, cells in runs]
+        systems = sorted(set().union(*per_run))
+        if not systems:
+            continue
+        head = ["System"]
+        for label in labels:
+            head += [f"{label} WER", f"{label} Mean WER", f"{label} CS pass", f"{label} median latency"]
+        head += [f"Δ WER ({label})" for label in labels[1:]]
+        out += [f"## {condition}", "", "| " + " | ".join(head) + " |", "|" + "---|" * len(head)]
+        for system in systems:
+            aggs = [slices(r[system]) if system in r else None for r in per_run]
+            vals = [system]
+            for sl in aggs:
+                if sl is None:
+                    vals += ["n/a"] * 4
+                    continue
+                d, a = sl["in_domain"], sl["all"]
+                vals += [_pct(d.word_edits, d.ref_words), _frac(d.wer_mean), _pct(a.cs_pass, a.cs_n),
+                         _sec(a.latency_median_s)]
+            for sl in aggs[1:]:
+                vals.append(_pp(aggs[0]["in_domain"], sl["in_domain"]) if aggs[0] and sl else "n/a")
+            out.append("| " + " | ".join(vals) + " |")
+        out.append("")
     return "\n".join(out)
 
 
