@@ -1,0 +1,114 @@
+"""Call one backend over the manifest and write raw records to ``<run_dir>/<system>.jsonl``.
+
+A run directory is shared by every leg of one evaluation (Google leg on the laptop,
+self-hosted leg on the devserver). ``run.json`` pins the dataset hash so two legs can never
+use different fixtures. Records are raw: no normalization, no metrics; ``score`` does that.
+"""
+from __future__ import annotations
+
+import json
+import subprocess
+from collections.abc import Callable
+from datetime import UTC, datetime
+from pathlib import Path
+
+from mlflow_registry.bench import manifest
+from mlflow_registry.bench.backends import Backend, BackendError, Hypothesis
+
+RUN_META = "run.json"
+CONDITIONS = ("hinted", "auto")
+
+
+class RunMismatch(RuntimeError):
+    """The run directory was created from different fixtures than the ones on disk."""
+
+
+def _now() -> str:
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _git_sha() -> str | None:
+    try:
+        return subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True,
+                              text=True, check=True).stdout.strip()
+    except Exception:
+        return None
+
+
+def ensure_run(run_dir: Path, fixtures_dir: Path, run_id: str | None = None,
+               git_sha: str | None = None) -> dict:
+    run_dir = Path(run_dir)
+    meta_path = run_dir / RUN_META
+    current_hash = manifest.dataset_hash(fixtures_dir)
+    if meta_path.exists():
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        if meta["dataset_hash"] != current_hash:
+            raise RunMismatch(
+                f"{meta_path} was created from dataset {meta['dataset_hash']} "
+                f"but {fixtures_dir} hashes to {current_hash}"
+            )
+        return meta
+    run_dir.mkdir(parents=True, exist_ok=True)
+    meta = {
+        "run_id": run_id or run_dir.name,
+        "dataset": str(Path(fixtures_dir).name),
+        "dataset_hash": current_hash,
+        "created": _now(),
+        "harness_git_sha": git_sha if git_sha is not None else _git_sha(),
+    }
+    meta_path.write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
+    return meta
+
+
+def record(system: str, condition: str, pass_no: int, utt: manifest.Utterance,
+           lang_hint: str | None, hyp: Hypothesis | None, error: str | None,
+           ts: str, backend_meta: dict) -> dict:
+    return {
+        "system": system,
+        "condition": condition,
+        "pass": pass_no,
+        "utt": utt.id,
+        "lang_hint": lang_hint,
+        "text": None if hyp is None else hyp.text,
+        "language": None if hyp is None else hyp.language,
+        "latency_s": None if hyp is None else hyp.latency_s,
+        "error": error,
+        "ts": ts,
+        "backend": backend_meta,
+    }
+
+
+def _one(backend: Backend, wav: bytes, lang: str | None) -> tuple[Hypothesis | None, str | None]:
+    try:
+        hyp = backend.transcribe(wav, lang)
+    except BackendError as e:
+        return None, f"{type(e).__name__}: {e}"
+    if not hyp.text.strip():
+        return hyp, "empty transcript"
+    return hyp, None
+
+
+def collect(backend: Backend, fixtures_dir: Path, run_dir: Path, passes: int = 3,
+            now: Callable[[], str] = _now, log: Callable[..., None] = print) -> Path:
+    fixtures_dir, run_dir = Path(fixtures_dir), Path(run_dir)
+    ensure_run(run_dir, fixtures_dir)
+    utts = manifest.load(fixtures_dir)
+    audio = {u.id: manifest.audio_bytes(fixtures_dir, u) for u in utts}
+    conditions = [c for c in CONDITIONS if c == "hinted" or backend.auto_detect]
+    meta = backend.meta()
+    out = run_dir / f"{backend.name}.jsonl"
+
+    log(f"[{backend.name}] warm-up")
+    _one(backend, audio[utts[0].id], utts[0].lang)
+
+    with out.open("w", encoding="utf-8") as fh:
+        for condition in conditions:
+            for pass_no in range(1, passes + 1):
+                for utt in utts:
+                    hint = utt.lang if condition == "hinted" else None
+                    hyp, error = _one(backend, audio[utt.id], hint)
+                    row = record(backend.name, condition, pass_no, utt, hint, hyp, error, now(), meta)
+                    fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+                    status = error or f"{hyp.latency_s:.2f}s {hyp.text!r}"
+                    log(f"[{backend.name}] {condition} p{pass_no} {utt.id}: {status}")
+    return out
