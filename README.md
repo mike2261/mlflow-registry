@@ -139,6 +139,7 @@ MLFLOW_ENABLE_PROXY_MULTIPART_DOWNLOAD=false
 | `gipformer1.5-68m-rnnt` | STT | vi | MIT (asserted, no LICENSE file) | onnxruntime / sherpa-onnx |
 | `parakeet-ctc-0.6b-vietnamese` | STT | vi | NVIDIA Open Model License | NeMo |
 | `whisper-large-v3` | STT | multi (baseline) | Apache-2.0 | transformers, faster-whisper |
+| `phowhisper-large` | STT | vi | BSD-3-Clause | transformers (added 2026-09-29) |
 | `voxcpm2` | TTS | vi, en, multi | Apache-2.0 | voxcpm |
 | `vieneu-tts-v3-turbo` | TTS | vi, en | Apache-2.0 | vieneu |
 | `kokoro-82m` | TTS | en, multi | Apache-2.0 | kokoro |
@@ -302,6 +303,7 @@ images; the first start downloads them from MLflow into the `serving_models` vol
 | `vieneu-tts-v3-turbo` | TTS | 5007 | `text`, `voice?` (preset, e.g. `Mai Anh`), `ref_audio_b64?` | 48 kHz |
 | `kokoro-82m` | TTS | 5008 | `text`, `voice?` (`af_heart`, `bm_george`, …) | 24 kHz |
 | `qwen3-tts-1.7b-base` | TTS | 5009 | `text`, `ref_audio_b64` **required**, `ref_text?`, `language?` | clone-only base model |
+| `phowhisper-large` | STT | 5010 | `audio_b64`, `language?` | Vietnamese only; Whisper large fine-tuned by VinAI |
 
 Audio goes in and out as **base64 WAV** (any libsndfile format in; 16-bit PCM WAV out).
 STT returns `{"text", "language"}`, TTS returns `{"audio_b64", "sample_rate"}`:

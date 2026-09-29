@@ -343,5 +343,42 @@ services:
               count: 1
               capabilities: [gpu]
 
+  serve-phowhisper-large:
+    image: mlflow-serving/phowhisper-large:latest
+    container_name: mr-serve-phowhisper-large
+    build:
+      context: .
+      dockerfile: serving/Dockerfile.model
+      args:
+        MODEL: phowhisper-large
+    profiles: [phowhisper-large]
+    restart: unless-stopped
+    depends_on:
+      mlflow:
+        condition: service_started
+    environment:
+      SERVING_MODEL_URI: models:/phowhisper-large@serving
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MODEL_CACHE: /models
+      HF_HOME: /models/.hf
+      MLFLOW_SCORING_SERVER_REQUEST_TIMEOUT: "600"
+    volumes:
+      - serving_models:/models
+    ports:
+      - "5010:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 900s
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
 volumes:
   serving_models:

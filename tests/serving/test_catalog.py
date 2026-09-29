@@ -15,17 +15,24 @@ SHORTLIST_NAMES = [
     "qwen3-asr-1.7b", "granite-speech-4.1-2b", "gipformer1.5-68m-rnnt",
     "parakeet-ctc-0.6b-vietnamese", "whisper-large-v3",
     "voxcpm2", "vieneu-tts-v3-turbo", "kokoro-82m", "qwen3-tts-1.7b-base",
+    "phowhisper-large",
 ]
 
 
-def test_catalog_covers_exactly_the_nine_shortlisted_models():
+def test_catalog_covers_exactly_the_shortlisted_models():
     assert list(catalog.SERVING) == SHORTLIST_NAMES
 
 
-def test_ports_are_unique_and_in_the_5001_5009_range():
+def test_ports_are_unique_and_in_the_5001_5010_range():
     ports = [s.port for s in catalog.SERVING.values()]
     assert len(set(ports)) == len(ports)
-    assert min(ports) == 5001 and max(ports) == 5009
+    assert min(ports) == 5001 and max(ports) == 5010
+
+
+def test_phowhisper_reuses_the_whisper_wrapper_on_port_5010():
+    spec = catalog.spec("phowhisper-large")
+    assert spec.task == "stt" and spec.port == 5010 and spec.gpu
+    assert spec.wrapper == catalog.SERVING["whisper-large-v3"].wrapper
 
 
 def test_every_wrapper_imports_without_its_runtime_and_subclasses_the_right_base():

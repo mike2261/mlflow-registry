@@ -67,6 +67,9 @@ SERVING: dict[str, ServingSpec] = {
                     note="voice = e.g. af_heart, bm_george (files in voices/)"),
         ServingSpec("qwen3-tts-1.7b-base", "tts", f"{_W}.tts_qwen3:Qwen3TtsTts", 5009,
                     note="base clone model: ref_audio_b64 required, ref_text recommended"),
+        # --- added after the first shortlist ----------------------------------
+        ServingSpec("phowhisper-large", "stt", f"{_W}.stt_whisper:WhisperStt", 5010,
+                    note="Vietnamese only (Whisper large fine-tuned by VinAI)"),
     ]
 }
 

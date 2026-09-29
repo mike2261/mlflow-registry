@@ -1,4 +1,4 @@
-"""whisper-large-v3 via the transformers ASR pipeline."""
+"""Whisper-architecture models (whisper-large-v3, phowhisper-large) via the transformers ASR pipeline."""
 
 from pathlib import Path
 
