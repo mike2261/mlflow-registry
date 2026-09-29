@@ -258,3 +258,23 @@ def test_comparison_puts_datasets_side_by_side():
     assert "clean WER" in header and "opus24 WER" in header and "Δ WER" in header
     row = next(line for line in text.splitlines() if line.startswith("| qwen3-asr-1.7b |"))
     assert "0.0% (0/4)" in row and "25.0% (1/4)" in row and "+25.0 pp" in row
+
+
+def test_detail_table_shows_only_the_worst_utterances_on_large_datasets():
+    utts = [Utterance(f"{i:03d}", f"{i:03d}.wav", "anh em", "vi", "vi_short", (), 1.0) for i in range(80)]
+    rows = [(u, "anh em", None, 0.1) for u in utts]
+    rows[5] = (utts[5], "sai hết", None, 0.1)                 # 2 word errors
+    rows[70] = (utts[70], "anh", None, 0.1)                  # 1 word error
+    rows[40] = (utts[40], None, "BackendError: 500", None)   # failure
+    cell = _cell_from("qwen3-asr-1.7b", "hinted", rows)
+    text = score.render_report(_META, utts, [cell], [], detail_limit=3)
+    assert "Showing the 3 worst of 80 utterances" in text
+    detail = text.split("## Detail: qwen3-asr-1.7b (hinted)")[1]
+    ids = [line.split("|")[1].strip() for line in detail.splitlines() if line.startswith("| 0")]
+    assert ids == ["040", "005", "070"]                      # failures first, then most word errors
+
+
+def test_detail_table_shows_everything_when_small(tmp_path):
+    _, records = score.load_run(_write_run(tmp_path))
+    text = score.render_report(_META, UTTS, score.build_cells(records, UTTS), [], detail_limit=3)
+    assert "Showing the" not in text

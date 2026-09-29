@@ -108,3 +108,22 @@ def test_compare_command_writes_side_by_side_report(tmp_path):
     assert "# STT evaluation: clean vs opus24" in text
     row = next(line for line in text.splitlines() if line.startswith("| chirp_3 |"))
     assert "0.0% (0/37)" in row and "5.4% (2/37)" in row
+
+
+def test_collect_concurrency_defaults_to_one():
+    assert eval_stt.parse(["collect", "--backend", "chirp", "--run", "r"]).concurrency == 1
+    assert eval_stt.parse(["collect", "--backend", "chirp", "--run", "r", "--concurrency", "8"]).concurrency == 8
+
+
+def test_datasets_command_builds_the_public_set(tmp_path, monkeypatch):
+    calls = {}
+
+    def fake_build(dst, cache):
+        calls.update(dst=dst, cache=cache)
+        return dst
+
+    monkeypatch.setattr(eval_stt.datasets, "build_public", fake_build)
+    monkeypatch.setattr(eval_stt.manifest, "load", lambda d: [])
+    monkeypatch.setattr(eval_stt.manifest, "dataset_hash", lambda d: "sha256:00")
+    assert eval_stt.main(["datasets", "--dst", str(tmp_path / "public"), "--cache", str(tmp_path / "c")]) == 0
+    assert calls == {"dst": tmp_path / "public", "cache": tmp_path / "c"}

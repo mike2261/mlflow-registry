@@ -19,7 +19,7 @@ import os
 import sys
 from pathlib import Path
 
-from mlflow_registry.bench import collect, manifest, score
+from mlflow_registry.bench import collect, datasets, manifest, score
 from mlflow_registry.bench.backends import STT_MODELS, Backend, ChirpBackend, ServingBackend
 
 
@@ -46,6 +46,9 @@ def parse(argv: list[str]) -> argparse.Namespace:
     c.add_argument("--run", required=True, help="run directory, e.g. eval/runs/2026-09-29-fixtures")
     c.add_argument("--fixtures", default=str(manifest.FIXTURES_DIR))
     c.add_argument("--passes", type=int, default=3)
+    c.add_argument("--concurrency", type=int, default=1,
+                   help="parallel requests; keep 1 for self-hosted models so latency is not measured "
+                        "under load, raise it for chirp on large datasets")
     c.add_argument("--models", default=None, help="serving: comma-separated names (default: all five STT)")
     c.add_argument("--host", default="localhost", help="serving: host of the containers")
     c.add_argument("--project", default=None,
@@ -63,6 +66,10 @@ def parse(argv: list[str]) -> argparse.Namespace:
     o.add_argument("--dst", default=str(manifest.FIXTURES_DIR.parent / "stt-fixtures-opus24"))
     o.add_argument("--bitrate", type=int, default=24_000)
     o.add_argument("--application", choices=["voip", "audio"], default="voip")
+
+    d = sub.add_parser("datasets", help="download and build the public set: FLEURS vi+en test, VIVOS test")
+    d.add_argument("--dst", default=str(manifest.FIXTURES_DIR.parent / "datasets" / "public-v1"))
+    d.add_argument("--cache", default=str(manifest.FIXTURES_DIR.parent / "datasets" / ".cache"))
 
     m = sub.add_parser("compare", help="side-by-side report of several scored runs (e.g. clean vs opus)")
     m.add_argument("--run", action="append", required=True, metavar="LABEL=DIR",
@@ -86,7 +93,8 @@ def build_backends(args: argparse.Namespace) -> list[Backend]:
 
 def cmd_collect(args: argparse.Namespace) -> int:
     for backend in build_backends(args):
-        out = collect.collect(backend, Path(args.fixtures), Path(args.run), passes=args.passes)
+        out = collect.collect(backend, Path(args.fixtures), Path(args.run), passes=args.passes,
+                              concurrency=args.concurrency)
         print(f"wrote {out}")
     return 0
 
@@ -135,7 +143,14 @@ def cmd_compare(args: argparse.Namespace) -> int:
     return 0
 
 
-COMMANDS = {"collect": cmd_collect, "score": cmd_score, "opus": cmd_opus, "compare": cmd_compare}
+def cmd_datasets(args: argparse.Namespace) -> int:
+    dst = datasets.build_public(Path(args.dst), Path(args.cache))
+    print(f"wrote {dst} ({len(manifest.load(dst))} utterances, {manifest.dataset_hash(dst)})")
+    return 0
+
+
+COMMANDS = {"collect": cmd_collect, "score": cmd_score, "opus": cmd_opus, "compare": cmd_compare,
+            "datasets": cmd_datasets}
 
 
 def main(argv: list[str] | None = None) -> int:

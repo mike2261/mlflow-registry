@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import subprocess
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -89,30 +90,37 @@ def _one(backend: Backend, wav: bytes, lang: str | None) -> tuple[Hypothesis | N
     return hyp, None
 
 
-def collect(backend: Backend, fixtures_dir: Path, run_dir: Path, passes: int = 3,
+def collect(backend: Backend, fixtures_dir: Path, run_dir: Path, passes: int = 3, concurrency: int = 1,
             now: Callable[[], str] = _now, log: Callable[..., None] = print) -> Path:
     fixtures_dir, run_dir = Path(fixtures_dir), Path(run_dir)
     # Every record carries the hash of the fixtures it was collected on, so score can refuse a
     # leg collected elsewhere on different fixtures even when that machine made its own run.json.
     dataset_hash = ensure_run(run_dir, fixtures_dir)["dataset_hash"]
     utts = manifest.load(fixtures_dir)
-    audio = {u.id: manifest.audio_bytes(fixtures_dir, u) for u in utts}
     conditions = [c for c in CONDITIONS if c == "hinted" or backend.auto_detect]
     meta = backend.meta()
     out = run_dir / f"{backend.name}.jsonl"
 
-    log(f"[{backend.name}] warm-up")
-    _one(backend, audio[utts[0].id], utts[0].lang)
+    def call(utt: manifest.Utterance, hint: str | None) -> tuple[Hypothesis | None, str | None, str]:
+        # audio is read per request so a large dataset is never held in memory at once
+        hyp, error = _one(backend, manifest.audio_bytes(fixtures_dir, utt), hint)
+        return hyp, error, now()
 
-    with out.open("w", encoding="utf-8") as fh:
+    log(f"[{backend.name}] warm-up")
+    call(utts[0], utts[0].lang)
+
+    # concurrency > 1 overlaps requests (useful for a cloud API); records are still written in
+    # manifest order. Keep it at 1 for self-hosted models so latency is not measured under load.
+    with ThreadPoolExecutor(max_workers=max(1, concurrency)) as pool, out.open("w", encoding="utf-8") as fh:
         for condition in conditions:
             for pass_no in range(1, passes + 1):
-                for utt in utts:
-                    hint = utt.lang if condition == "hinted" else None
-                    hyp, error = _one(backend, audio[utt.id], hint)
-                    row = record(backend.name, condition, pass_no, utt, hint, hyp, error, now(), meta,
+                hints = [utt.lang if condition == "hinted" else None for utt in utts]
+                results = pool.map(call, utts, hints)
+                for i, (utt, hint, (hyp, error, ts)) in enumerate(zip(utts, hints, results), 1):
+                    row = record(backend.name, condition, pass_no, utt, hint, hyp, error, ts, meta,
                                  dataset_hash)
                     fh.write(json.dumps(row, ensure_ascii=False) + "\n")
-                    status = error or f"{hyp.latency_s:.2f}s {hyp.text!r}"
-                    log(f"[{backend.name}] {condition} p{pass_no} {utt.id}: {status}")
+                    status = error or f"{hyp.latency_s:.2f}s {hyp.text[:60]!r}"
+                    log(f"[{backend.name}] {condition} p{pass_no} {i}/{len(utts)} {utt.id}: {status}")
+                fh.flush()
     return out

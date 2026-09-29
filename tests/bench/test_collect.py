@@ -112,3 +112,37 @@ def test_records_carry_the_dataset_hash_of_the_fixtures_they_were_collected_on(t
     fx = _fixtures(tmp_path)
     rows = _read(collect.collect(FakeBackend(auto=False), fx, tmp_path / "run", passes=1, log=lambda *_: None))
     assert {r["dataset_hash"] for r in rows} == {manifest.dataset_hash(fx)}
+
+
+def test_concurrent_collect_really_overlaps_requests_and_keeps_record_order(tmp_path):
+    import threading
+    import time
+
+    fx = _fixtures(tmp_path)
+
+    class SlowBackend(FakeBackend):
+        def __init__(self):
+            super().__init__(auto=True, fail_on={"13"})
+            self.lock = threading.Lock()
+            self.in_flight = 0
+            self.max_in_flight = 0
+
+        def transcribe(self, wav, language):
+            with self.lock:
+                self.in_flight += 1
+                self.max_in_flight = max(self.max_in_flight, self.in_flight)
+            time.sleep(0.05)
+            try:
+                return super().transcribe(wav, language)
+            finally:
+                with self.lock:
+                    self.in_flight -= 1
+
+    seq = _read(collect.collect(FakeBackend(auto=True, fail_on={"13"}), fx, tmp_path / "seq", passes=2,
+                                log=lambda *_: None))
+    slow = SlowBackend()
+    par = _read(collect.collect(slow, fx, tmp_path / "par", passes=2, concurrency=4, log=lambda *_: None))
+
+    assert slow.max_in_flight > 1
+    key = lambda r: (r["condition"], r["pass"], r["utt"], r["text"], r["error"])  # noqa: E731
+    assert [key(r) for r in par] == [key(r) for r in seq]

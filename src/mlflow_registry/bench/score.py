@@ -217,8 +217,17 @@ def _slice_table(cells: list[Cell], prefix: str, title: str) -> list[str]:
     return lines + [""]
 
 
+DETAIL_LIMIT = 40
+
+
+def _worst(rows: list[Scored], limit: int) -> list[Scored]:
+    """Failures first, then most word errors; manifest order breaks ties."""
+    ranked = sorted(enumerate(rows), key=lambda ir: (not ir[1].failed, -ir[1].word_edits, ir[0]))
+    return [r for _, r in ranked[:limit]]
+
+
 def render_report(meta: dict, utts: list[Utterance], cells: list[Cell],
-                  nondet: list[tuple[str, str, str, list[str]]]) -> str:
+                  nondet: list[tuple[str, str, str, list[str]]], detail_limit: int = DETAIL_LIMIT) -> str:
     words = sum(len(u.text.split()) for u in utts)
     audio = sum(u.duration_s for u in utts)
     caveat = (f"This dataset has {words} reference words. It **cannot rank models**; it proves the "
@@ -252,9 +261,14 @@ def render_report(meta: dict, utts: list[Utterance], cells: list[Cell],
         out += _slice_table(group, "cat:", "category")
 
     for cell in cells:
-        out += [f"## Detail: {cell.system} ({cell.condition})", "",
-                "| Utt | Ref | Hyp | Lang | WER | Latency |", "|---|---|---|---|---|---|"]
-        for r in cell.rows:
+        out += [f"## Detail: {cell.system} ({cell.condition})", ""]
+        shown = cell.rows
+        if len(cell.rows) > detail_limit:
+            shown = _worst(cell.rows, detail_limit)
+            out += [f"Showing the {detail_limit} worst of {len(cell.rows)} utterances (failures first, then "
+                    "most word errors); every hypothesis is in the run's JSONL.", ""]
+        out += ["| Utt | Ref | Hyp | Lang | WER | Latency |", "|---|---|---|---|---|---|"]
+        for r in shown:
             hyp = f"⚠ {r.error}" if r.failed else (r.hyp or "")
             wer = "n/a" if r.failed else _pct(r.word_edits, r.ref_words)
             lang = cell.languages.get(r.utt.id) or "—"
