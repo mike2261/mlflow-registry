@@ -17,18 +17,23 @@ def _fake_clock():
     return clock
 
 
-def test_capability_tables_cover_the_six_systems():
+def test_capability_tables_cover_the_seven_systems():
     assert set(backends.SYSTEM_LANGS) == {
         "qwen3-asr-1.7b", "granite-speech-4.1-2b", "gipformer1.5-68m-rnnt",
-        "parakeet-ctc-0.6b-vietnamese", "whisper-large-v3", "chirp_3",
+        "parakeet-ctc-0.6b-vietnamese", "whisper-large-v3", "phowhisper-large", "chirp_3",
     }
     assert backends.SYSTEM_LANGS["gipformer1.5-68m-rnnt"] == frozenset({"vi"})
     assert backends.SYSTEM_LANGS["granite-speech-4.1-2b"] == frozenset({"en"})
+    assert backends.SYSTEM_LANGS["phowhisper-large"] == frozenset({"vi"})
     assert backends.AUTO_DETECT == frozenset({"qwen3-asr-1.7b", "whisper-large-v3", "chirp_3"})
     assert backends.STT_MODELS == (
         "qwen3-asr-1.7b", "granite-speech-4.1-2b", "gipformer1.5-68m-rnnt",
-        "parakeet-ctc-0.6b-vietnamese", "whisper-large-v3",
+        "parakeet-ctc-0.6b-vietnamese", "whisper-large-v3", "phowhisper-large",
     )
+
+
+def test_every_servable_stt_model_has_a_language_entry():
+    assert set(backends.STT_MODELS) <= set(backends.SYSTEM_LANGS)
 
 
 def test_serving_backend_posts_dataframe_records_and_parses_prediction():

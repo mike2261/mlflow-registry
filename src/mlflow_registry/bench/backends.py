@@ -34,6 +34,7 @@ SYSTEM_LANGS: dict[str, frozenset[str]] = {
     "gipformer1.5-68m-rnnt": frozenset({"vi"}),
     "parakeet-ctc-0.6b-vietnamese": frozenset({"vi"}),
     "whisper-large-v3": frozenset({"vi", "en"}),
+    "phowhisper-large": frozenset({"vi"}),
     CHIRP_NAME: frozenset({"vi", "en"}),
 }
 AUTO_DETECT: frozenset[str] = frozenset({"qwen3-asr-1.7b", "whisper-large-v3", CHIRP_NAME})
