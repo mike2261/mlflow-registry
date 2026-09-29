@@ -410,6 +410,24 @@ here latency is one HTTP request for the whole clip (inference plus transfer, no
 Split-vs-full mode waits for the t2xx recordings; the code-switch pipeline metrics (language
 tag accuracy, repairs) measure robo-be's router, not a model.
 
+**Public dataset (`public-v1`).** FLEURS Vietnamese and English test splits (CC-BY-4.0, 857 + 647
+read sentences, ~5 h) and the VIVOS test split (CC-BY-NC-SA-4.0, non-commercial, 760 Vietnamese
+read utterances, ~45 min), in one manifest with categories `fleurs_vi`, `fleurs_en`, `vivos_vi`.
+About 1 GB of audio, so it is built locally and gitignored; `source.json` records origin and
+licence. Use one pass and parallel Google requests; keep self-hosted models sequential.
+
+```bash
+uv run python scripts/eval_stt.py datasets                                  # -> eval/datasets/public-v1
+uv run python scripts/eval_stt.py collect --backend chirp --fixtures eval/datasets/public-v1 \
+    --run eval/runs/<id>-public --passes 1 --concurrency 8
+# devserver (rsync eval/datasets/public-v1 first):
+uv run python scripts/eval_stt.py collect --backend serving --fixtures eval/datasets/public-v1 \
+    --run eval/runs/<id>-public --passes 1
+uv run python scripts/eval_stt.py score --run eval/runs/<id>-public --fixtures eval/datasets/public-v1
+```
+
+Large reports list only the 40 worst utterances per system; every hypothesis stays in the JSONL.
+
 ```bash
 # Opus condition: build the degraded set once (committed), then collect/score it like any dataset
 uv run python scripts/eval_stt.py opus                  # eval/stt-fixtures -> eval/stt-fixtures-opus24
@@ -425,7 +443,7 @@ uv run python scripts/eval_stt.py compare --run clean=eval/runs/<id> --run opus2
 ```bash
 uv sync --group dev --extra hf --extra bench   # deps (+ huggingface_hub for hf: specs, + bench)
 docker compose up -d                 # local stack
-uv run pytest                        # 150 tests; many hit the live stack and clean up after themselves
+uv run pytest                        # 158 tests; many hit the live stack and clean up after themselves
 uv run mlflow-registry --help
 ```
 
