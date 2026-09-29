@@ -30,6 +30,7 @@ def test_metric_dict_is_flat_and_skips_none():
     assert "wer_en" not in m            # the only en row failed -> no reference words -> None -> dropped
     assert m["cost_usd_per_min"] == pytest.approx(0.016)
     assert m["failed_requests"] == 3 and m["requests"] == 6
+    assert m["in_domain_no_numbers.wer"] == 0.0 and m["in_domain_no_numbers.ref_words"] == 2
     assert all(isinstance(v, (int, float)) for v in m.values())
 
 

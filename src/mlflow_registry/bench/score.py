@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -35,6 +36,7 @@ class Cell:
     requests: int = 0                       # every request over every pass
     failed_requests: int = 0                # errors or empty text in any pass
     languages: dict[str, str | None] = field(default_factory=dict)   # utt id -> pass-1 detected language
+    numbers: frozenset[str] = frozenset()   # utterances with a number anywhere in the run (see number_utt_ids)
 
 
 def load_run(run_dir: Path, allow_missing_baseline: bool = False) -> tuple[dict, list[dict]]:
@@ -57,7 +59,24 @@ def load_run(run_dir: Path, allow_missing_baseline: bool = False) -> tuple[dict,
     return meta, records
 
 
+_DIGIT = re.compile(r"\d")
+
+
+def number_utt_ids(records: list[dict], utts: list[Utterance]) -> frozenset[str]:
+    """Utterances whose reference or any system's output (any condition, any pass) has a digit.
+
+    Numbers have several correct written forms ("1537" vs "một nghìn năm trăm ba mươi bảy"),
+    datasets and models pick different ones, and WER then charges a correctly heard number as
+    several errors. Leaving these utterances out for every system gives a like-for-like subset.
+    A spelled-out reference is caught through the systems that write it as digits.
+    """
+    ids = {u.id for u in utts if _DIGIT.search(u.text)}
+    ids |= {r["utt"] for r in records if r.get("text") and _DIGIT.search(r["text"])}
+    return frozenset(ids)
+
+
 def build_cells(records: list[dict], utts: list[Utterance]) -> list[Cell]:
+    numbers = number_utt_ids(records, utts)
     grouped: dict[tuple[str, str], dict[str, list[dict]]] = defaultdict(lambda: defaultdict(list))
     for r in records:
         grouped[(r["system"], r["condition"])][r["utt"]].append(r)
@@ -82,6 +101,7 @@ def build_cells(records: list[dict], utts: list[Utterance]) -> list[Cell]:
             requests=len(cell_records),
             failed_requests=sum(1 for r in cell_records if r["error"] is not None),
             languages=languages,
+            numbers=numbers,
         ))
     return cells
 
@@ -101,7 +121,8 @@ def in_domain(cell: Cell) -> list[Scored]:
 
 
 def slices(cell: Cell) -> dict[str, Aggregate]:
-    out = {"all": aggregate(cell.rows), "in_domain": aggregate(in_domain(cell))}
+    out = {"all": aggregate(cell.rows), "in_domain": aggregate(in_domain(cell)),
+           "in_domain_no_numbers": aggregate(r for r in in_domain(cell) if r.utt.id not in cell.numbers)}
     for lang in sorted({r.utt.lang for r in cell.rows}):
         out[f"lang:{lang}"] = aggregate(r for r in cell.rows if r.utt.lang == lang)
     for cat in sorted({r.utt.category for r in cell.rows}):
@@ -136,15 +157,16 @@ def _frac(x: float | None) -> str:
 
 
 def _summary_table(cells: list[Cell]) -> list[str]:
-    lines = ["| System | In-domain WER | Mean WER | CER | Exact | EN recall | CS pass | Median latency | p95 | "
-             "RTF | Failed utts (pass 1) | $/min | Failed requests (all passes) |",
-             "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    lines = ["| System | In-domain WER | WER, no numbers | Mean WER | CER | Exact | EN recall | CS pass | "
+             "Median latency | p95 | RTF | Failed utts (pass 1) | $/min | Failed requests (all passes) |",
+             "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for cell in cells:
         sl = slices(cell)
-        d, a = sl["in_domain"], sl["all"]
+        d, a, nn = sl["in_domain"], sl["all"], sl["in_domain_no_numbers"]
         cost = cost_per_min(cell.system)
         lines.append(
-            f"| {cell.system} | {_pct(d.word_edits, d.ref_words)} | {_frac(d.wer_mean)} | "
+            f"| {cell.system} | {_pct(d.word_edits, d.ref_words)} | {_pct(nn.word_edits, nn.ref_words)} | "
+            f"{_frac(d.wer_mean)} | "
             f"{_pct(d.char_edits, d.ref_chars)} | {_pct(d.exact, d.n)} | {_pct(a.en_hits, a.en_total)} | "
             f"{_pct(a.cs_pass, a.cs_n)} | {_sec(a.latency_median_s)} | {_sec(a.latency_p95_s)} | "
             f"{_rate(a.rtf)} | {a.failures}/{a.n} | "
@@ -254,6 +276,11 @@ def render_report(meta: dict, utts: list[Utterance], cells: list[Cell],
                 "bench_stt.py). CS pass = every expected English word present, vacuously true for "
                 "utterances without English (as bench_stt.py). EN recall, CS pass, latency, RTF and "
                 "failures are over all utterances.", ""]
+        numbers = group[0].numbers
+        out += [f"{len(numbers)} of {len(utts)} utterances contain a number (a digit in the reference or in "
+                "any system's output). Numbers have several correct written forms (\"1537\" vs \"một nghìn "
+                "năm trăm ba mươi bảy\") and WER charges a correctly heard number as several errors when the "
+                "forms differ, so \"WER, no numbers\" leaves those utterances out for every system.", ""]
         out += _summary_table(group) + [""]
         out += _latency_table(group, condition)
         out += _winner_table(group, condition)

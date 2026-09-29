@@ -11,14 +11,16 @@
 
 In-domain = utterances in a language the system claims to support. In-domain WER is pooled (as robo-be bench_wer.py); Mean WER is the mean of per-utterance WER (as bench_stt.py). CS pass = every expected English word present, vacuously true for utterances without English (as bench_stt.py). EN recall, CS pass, latency, RTF and failures are over all utterances.
 
-| System | In-domain WER | Mean WER | CER | Exact | EN recall | CS pass | Median latency | p95 | RTF | Failed utts (pass 1) | $/min | Failed requests (all passes) |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| chirp_3 | 2.7% (1/37) | 0.9% | 1.5% (2/134) | 92.9% (13/14) | 100.0% (9/9) | 100.0% (14/14) | 1.67s | 2.03s | 0.92 | 0/14 | $0.016 | 0/42 |
-| gipformer1.5-68m-rnnt | 3.6% (1/28) | 1.1% | 2.2% (2/89) | 90.9% (10/11) | 22.2% (2/9) | 78.6% (11/14) | 0.03s | 0.07s | 0.02 | 0/14 | — | 0/42 |
-| granite-speech-4.1-2b | 0.0% (0/9) | 0.0% | 0.0% (0/45) | 100.0% (3/3) | 100.0% (9/9) | 100.0% (14/14) | 0.13s | 0.27s | 0.09 | 0/14 | — | 0/42 |
-| parakeet-ctc-0.6b-vietnamese | 14.3% (4/28) | 8.0% | 6.7% (6/89) | 81.8% (9/11) | 0.0% (0/9) | 78.6% (11/14) | 0.06s | 0.06s | 0.04 | 0/14 | — | 0/42 |
-| qwen3-asr-1.7b | 2.7% (1/37) | 0.9% | 1.5% (2/134) | 92.9% (13/14) | 100.0% (9/9) | 100.0% (14/14) | 0.14s | 0.25s | 0.09 | 0/14 | — | 0/42 |
-| whisper-large-v3 | 5.4% (2/37) | 1.8% | 2.2% (3/134) | 92.9% (13/14) | 100.0% (9/9) | 100.0% (14/14) | 0.24s | 0.41s | 0.16 | 0/14 | — | 0/42 |
+0 of 14 utterances contain a number (a digit in the reference or in any system's output). Numbers have several correct written forms ("1537" vs "một nghìn năm trăm ba mươi bảy") and WER charges a correctly heard number as several errors when the forms differ, so "WER, no numbers" leaves those utterances out for every system.
+
+| System | In-domain WER | WER, no numbers | Mean WER | CER | Exact | EN recall | CS pass | Median latency | p95 | RTF | Failed utts (pass 1) | $/min | Failed requests (all passes) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| chirp_3 | 2.7% (1/37) | 2.7% (1/37) | 0.9% | 1.5% (2/134) | 92.9% (13/14) | 100.0% (9/9) | 100.0% (14/14) | 1.67s | 2.03s | 0.92 | 0/14 | $0.016 | 0/42 |
+| gipformer1.5-68m-rnnt | 3.6% (1/28) | 3.6% (1/28) | 1.1% | 2.2% (2/89) | 90.9% (10/11) | 22.2% (2/9) | 78.6% (11/14) | 0.03s | 0.07s | 0.02 | 0/14 | — | 0/42 |
+| granite-speech-4.1-2b | 0.0% (0/9) | 0.0% (0/9) | 0.0% | 0.0% (0/45) | 100.0% (3/3) | 100.0% (9/9) | 100.0% (14/14) | 0.13s | 0.27s | 0.09 | 0/14 | — | 0/42 |
+| parakeet-ctc-0.6b-vietnamese | 14.3% (4/28) | 14.3% (4/28) | 8.0% | 6.7% (6/89) | 81.8% (9/11) | 0.0% (0/9) | 78.6% (11/14) | 0.06s | 0.06s | 0.04 | 0/14 | — | 0/42 |
+| qwen3-asr-1.7b | 2.7% (1/37) | 2.7% (1/37) | 0.9% | 1.5% (2/134) | 92.9% (13/14) | 100.0% (9/9) | 100.0% (14/14) | 0.14s | 0.25s | 0.09 | 0/14 | — | 0/42 |
+| whisper-large-v3 | 5.4% (2/37) | 5.4% (2/37) | 1.8% | 2.2% (3/134) | 92.9% (13/14) | 100.0% (9/9) | 100.0% (14/14) | 0.24s | 0.41s | 0.16 | 0/14 | — | 0/42 |
 
 ### Latency: hinted
 
@@ -70,11 +72,13 @@ robo-be rule: among systems that support the category's language, code-switch pa
 
 In-domain = utterances in a language the system claims to support. In-domain WER is pooled (as robo-be bench_wer.py); Mean WER is the mean of per-utterance WER (as bench_stt.py). CS pass = every expected English word present, vacuously true for utterances without English (as bench_stt.py). EN recall, CS pass, latency, RTF and failures are over all utterances.
 
-| System | In-domain WER | Mean WER | CER | Exact | EN recall | CS pass | Median latency | p95 | RTF | Failed utts (pass 1) | $/min | Failed requests (all passes) |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| chirp_3 | 2.7% (1/37) | 0.9% | 1.5% (2/134) | 92.9% (13/14) | 100.0% (9/9) | 100.0% (14/14) | 1.04s | 1.80s | 0.71 | 0/14 | $0.016 | 0/42 |
-| qwen3-asr-1.7b | 8.1% (3/37) | 8.0% | 3.0% (4/134) | 85.7% (12/14) | 100.0% (9/9) | 100.0% (14/14) | 0.22s | 0.32s | 0.14 | 0/14 | — | 0/42 |
-| whisper-large-v3 | 21.6% (8/37) | 23.2% | 11.2% (15/134) | 71.4% (10/14) | 100.0% (9/9) | 100.0% (14/14) | 0.31s | 0.48s | 0.20 | 0/14 | — | 0/42 |
+0 of 14 utterances contain a number (a digit in the reference or in any system's output). Numbers have several correct written forms ("1537" vs "một nghìn năm trăm ba mươi bảy") and WER charges a correctly heard number as several errors when the forms differ, so "WER, no numbers" leaves those utterances out for every system.
+
+| System | In-domain WER | WER, no numbers | Mean WER | CER | Exact | EN recall | CS pass | Median latency | p95 | RTF | Failed utts (pass 1) | $/min | Failed requests (all passes) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| chirp_3 | 2.7% (1/37) | 2.7% (1/37) | 0.9% | 1.5% (2/134) | 92.9% (13/14) | 100.0% (9/9) | 100.0% (14/14) | 1.04s | 1.80s | 0.71 | 0/14 | $0.016 | 0/42 |
+| qwen3-asr-1.7b | 8.1% (3/37) | 8.1% (3/37) | 8.0% | 3.0% (4/134) | 85.7% (12/14) | 100.0% (9/9) | 100.0% (14/14) | 0.22s | 0.32s | 0.14 | 0/14 | — | 0/42 |
+| whisper-large-v3 | 21.6% (8/37) | 21.6% (8/37) | 23.2% | 11.2% (15/134) | 71.4% (10/14) | 100.0% (9/9) | 100.0% (14/14) | 0.31s | 0.48s | 0.20 | 0/14 | — | 0/42 |
 
 ### Latency: auto
 

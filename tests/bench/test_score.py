@@ -278,3 +278,49 @@ def test_detail_table_shows_everything_when_small(tmp_path):
     _, records = score.load_run(_write_run(tmp_path))
     text = score.render_report(_META, UTTS, score.build_cells(records, UTTS), [], detail_limit=3)
     assert "Showing the" not in text
+
+
+# --- no-numbers slice -----------------------------------------------------------------------
+
+NUM_UTTS = [
+    Utterance("a", "a.wav", "năm 1537 người", "vi", "fleurs_vi", (), 1.0),            # digit in reference
+    Utterance("b", "b.wav", "tám mươi tám tám mươi chín", "vi", "vivos_vi", (), 1.0),  # spelled; one system writes digits
+    Utterance("c", "c.wav", "anh em", "vi", "vivos_vi", (), 1.0),                    # no number anywhere
+]
+
+
+def _num_records():
+    def rec(system, utt, text):
+        return {"system": system, "condition": "hinted", "pass": 1, "utt": utt, "lang_hint": "vi",
+                "text": text, "language": "vi", "latency_s": 0.1, "error": None, "ts": "t",
+                "backend": {"kind": "fake"}, "dataset_hash": "sha256:00"}
+    return [
+        rec("chirp_3", "a", "năm 1537 người"), rec("chirp_3", "b", "88 89"), rec("chirp_3", "c", "anh em"),
+        rec("gipformer1.5-68m-rnnt", "a", "năm một nghìn năm trăm ba mươi bảy người"),
+        rec("gipformer1.5-68m-rnnt", "b", "tám mươi tám tám mươi chín"),
+        rec("gipformer1.5-68m-rnnt", "c", "anh"),
+    ]
+
+
+def test_number_utterances_are_those_with_a_digit_in_the_reference_or_any_output():
+    assert score.number_utt_ids(_num_records(), NUM_UTTS) == frozenset({"a", "b"})
+
+
+def test_no_numbers_slice_scores_every_system_on_the_same_subset():
+    cells = {c.system: c for c in score.build_cells(_num_records(), NUM_UTTS)}
+    for cell in cells.values():
+        assert score.slices(cell)["in_domain_no_numbers"].n == 1       # only utterance "c" for everyone
+    assert score.slices(cells["chirp_3"])["in_domain_no_numbers"].wer == 0.0
+    assert score.slices(cells["gipformer1.5-68m-rnnt"])["in_domain_no_numbers"].wer == 0.5
+    # on the number utterances both systems are punished for formatting, not hearing
+    assert score.slices(cells["gipformer1.5-68m-rnnt"])["in_domain"].word_edits > 1
+
+
+def test_report_shows_the_no_numbers_column_and_how_many_utterances_it_drops():
+    cells = score.build_cells(_num_records(), NUM_UTTS)
+    text = score.render_report(_META, NUM_UTTS, cells, [])
+    header = next(line for line in text.splitlines() if line.startswith("| System | In-domain WER"))
+    assert "WER, no numbers" in header
+    assert "2 of 3 utterances contain a number" in text
+    row = next(line for line in text.splitlines() if line.startswith("| gipformer1.5-68m-rnnt |"))
+    assert "50.0% (1/2)" in row

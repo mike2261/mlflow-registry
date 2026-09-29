@@ -18,6 +18,11 @@ _AGG_FIELDS = ("wer", "cer", "wer_mean", "exact_rate", "en_recall", "cs_pass_rat
 def metric_dict(cell: Cell) -> dict[str, float]:
     out: dict[str, float] = {}
     sl = slices(cell)
+    nn = sl["in_domain_no_numbers"]
+    for field_name in ("wer", "cer", "ref_words", "n"):
+        value = getattr(nn, field_name)
+        if value is not None:
+            out[f"in_domain_no_numbers.{field_name}"] = float(value)
     for scope in ("in_domain", "all"):
         for field in _AGG_FIELDS:
             value = getattr(sl[scope], field)
