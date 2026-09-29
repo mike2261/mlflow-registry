@@ -75,3 +75,36 @@ def test_score_has_no_passes_flag_it_reads_passes_from_the_data():
     import pytest
     with pytest.raises(SystemExit):
         eval_stt.parse(["score", "--run", "r", "--passes", "3"])
+
+
+def _fake_run(run: Path, fixtures: Path, text_for=lambda u: u.text) -> Path:
+    run.mkdir(parents=True)
+    h = manifest.dataset_hash(fixtures)
+    (run / "run.json").write_text(json.dumps({
+        "run_id": run.name, "dataset": fixtures.name, "dataset_hash": h, "created": "t"}))
+    rows = [{"system": "chirp_3", "condition": "hinted", "pass": 1, "utt": u.id, "lang_hint": u.lang,
+             "text": text_for(u), "language": u.lang, "latency_s": 0.5, "error": None, "ts": "t",
+             "backend": {"kind": "chirp"}, "dataset_hash": h} for u in manifest.load(fixtures)]
+    (run / "chirp_3.jsonl").write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in rows) + "\n")
+    return run
+
+
+def test_opus_command_builds_the_opus_fixture_set(tmp_path):
+    import pytest
+    pytest.importorskip("opuslib")
+    dst = tmp_path / "stt-fixtures-opus24"
+    assert eval_stt.main(["opus", "--dst", str(dst)]) == 0
+    assert len(manifest.load(dst)) == 14 and (dst / "source.json").exists()
+
+
+def test_compare_command_writes_side_by_side_report(tmp_path):
+    clean = _fake_run(tmp_path / "clean", manifest.FIXTURES_DIR)
+    other = _fake_run(tmp_path / "opus", manifest.FIXTURES_DIR,
+                      text_for=lambda u: "sai" if u.id == "00" else u.text)
+    out = tmp_path / "compare.md"
+    assert eval_stt.main(["compare", "--run", f"clean={clean}", "--run", f"opus24={other}",
+                          "--out", str(out)]) == 0
+    text = out.read_text(encoding="utf-8")
+    assert "# STT evaluation: clean vs opus24" in text
+    row = next(line for line in text.splitlines() if line.startswith("| chirp_3 |"))
+    assert "0.0% (0/37)" in row and "5.4% (2/37)" in row

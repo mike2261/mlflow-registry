@@ -57,6 +57,20 @@ def parse(argv: list[str]) -> argparse.Namespace:
     s.add_argument("--fixtures", default=str(manifest.FIXTURES_DIR))
     s.add_argument("--mlflow", action="store_true")
     s.add_argument("--allow-missing-baseline", action="store_true")
+
+    o = sub.add_parser("opus", help="build an Opus-degraded copy of a fixture set (robo-be wire codec)")
+    o.add_argument("--src", default=str(manifest.FIXTURES_DIR))
+    o.add_argument("--dst", default=str(manifest.FIXTURES_DIR.parent / "stt-fixtures-opus24"))
+    o.add_argument("--bitrate", type=int, default=24_000)
+    o.add_argument("--application", choices=["voip", "audio"], default="voip")
+
+    m = sub.add_parser("compare", help="side-by-side report of several scored runs (e.g. clean vs opus)")
+    m.add_argument("--run", action="append", required=True, metavar="LABEL=DIR",
+                   help="repeat; the first run is the baseline for the delta column")
+    m.add_argument("--fixtures-root", default=str(manifest.FIXTURES_DIR.parent),
+                   help="folder holding each run's dataset (run.json 'dataset' is the subfolder)")
+    m.add_argument("--out", required=True)
+    m.add_argument("--allow-missing-baseline", action="store_true")
     return p.parse_args(argv)
 
 
@@ -96,9 +110,37 @@ def cmd_score(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_opus(args: argparse.Namespace) -> int:
+    from mlflow_registry.bench import opus
+
+    dst = opus.make_opus_fixtures(Path(args.src), Path(args.dst), args.bitrate, args.application)
+    print(f"wrote {dst} ({len(manifest.load(dst))} utterances, {manifest.dataset_hash(dst)})")
+    return 0
+
+
+def cmd_compare(args: argparse.Namespace) -> int:
+    runs = []
+    for spec in args.run:
+        label, sep, path = spec.partition("=")
+        if not sep:
+            sys.exit(f"--run expects LABEL=DIR, got {spec!r}")
+        meta, records = score.load_run(Path(path), allow_missing_baseline=args.allow_missing_baseline)
+        fixtures = Path(args.fixtures_root) / meta["dataset"]
+        if manifest.dataset_hash(fixtures) != meta["dataset_hash"]:
+            sys.exit(f"{path}: dataset {meta['dataset_hash']} does not match {fixtures} on disk")
+        runs.append((label, meta, score.build_cells(records, manifest.load(fixtures))))
+    out = Path(args.out)
+    out.write_text(score.render_comparison(runs), encoding="utf-8")
+    print(f"wrote {out}")
+    return 0
+
+
+COMMANDS = {"collect": cmd_collect, "score": cmd_score, "opus": cmd_opus, "compare": cmd_compare}
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse(sys.argv[1:] if argv is None else argv)
-    return cmd_collect(args) if args.cmd == "collect" else cmd_score(args)
+    return COMMANDS[args.cmd](args)
 
 
 if __name__ == "__main__":

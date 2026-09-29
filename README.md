@@ -372,7 +372,7 @@ speech). It proves the harness and catches gross failures; it cannot rank models
 bigger set by pointing `--fixtures` at another folder with the same `manifest.jsonl` shape.
 
 ```bash
-uv sync --group dev --extra hf --extra bench           # + jiwer, google-cloud-speech
+uv sync --group dev --extra hf --extra bench           # + jiwer, google-cloud-speech, opuslib (needs libopus0)
 
 # laptop: Google leg (ADC via `gcloud auth application-default login`; project from gcloud config)
 uv run python scripts/eval_stt.py collect --backend chirp --run eval/runs/2026-09-29-fixtures
@@ -394,6 +394,30 @@ every system; `auto` (no hint) for Qwen3-ASR and Whisper (open-world detection) 
 three passes; text from pass 1, latency = median. Chirp 3 is GA only in the `us` / `eu`
 multi-regions (`--location`), so its latency includes that hop.
 
+**Metrics shared with robo-be's benchmarks** (`robo-be/benchmarks/stt`, `tts`):
+
+| robo-be | Here | Note |
+|---|---|---|
+| `bench_wer.py` aggregate WER / CER (Σ edits / Σ words) | In-domain WER, CER | same pooling; ours adds Unicode NFC |
+| `bench_stt.py` `wer_mean` | Mean WER | mean of per-utterance WER |
+| `bench_stt.py` code-switch pass rate | CS pass | every expected English word present; vacuously true without English |
+| `bench_stt.py` category winner | Category winners | code-switch dominates, then mean WER; only systems supporting the language compete |
+| `bench_tts.py` mean / median / p95 / min / max | Latency table | p95 by the same linear interpolation |
+| `bench_wer.py` Opus 24 kbps VOIP, 20 ms frames | `eval/stt-fixtures-opus24/` | encoded and decoded offline with `opuslib`, as robo-be's clients and server do |
+
+Not comparable: robo-be times end of speech to final transcript over its streaming WebSocket;
+here latency is one HTTP request for the whole clip (inference plus transfer, no VAD or NATS).
+Split-vs-full mode waits for the t2xx recordings; the code-switch pipeline metrics (language
+tag accuracy, repairs) measure robo-be's router, not a model.
+
+```bash
+# Opus condition: build the degraded set once (committed), then collect/score it like any dataset
+uv run python scripts/eval_stt.py opus                  # eval/stt-fixtures -> eval/stt-fixtures-opus24
+uv run python scripts/eval_stt.py collect --backend chirp --fixtures eval/stt-fixtures-opus24 --run eval/runs/<id>-opus24
+# ... serving leg with the same --fixtures on the devserver, then score as above ...
+uv run python scripts/eval_stt.py compare --run clean=eval/runs/<id> --run opus24=eval/runs/<id>-opus24 --out reports/<id>-clean-vs-opus24.md
+```
+
 ---
 
 ## 6. Development
@@ -401,7 +425,7 @@ multi-regions (`--location`), so its latency includes that hop.
 ```bash
 uv sync --group dev --extra hf --extra bench   # deps (+ huggingface_hub for hf: specs, + bench)
 docker compose up -d                 # local stack
-uv run pytest                        # 122 tests; many hit the live stack and clean up after themselves
+uv run pytest                        # 150 tests; many hit the live stack and clean up after themselves
 uv run mlflow-registry --help
 ```
 
