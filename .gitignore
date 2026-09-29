@@ -10,3 +10,6 @@ mlruns/
 mlartifacts/
 .pytest_cache/
 register.log
+
+# evaluation results (reports worth keeping are copied to reports/)
+eval/runs/

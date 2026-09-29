@@ -44,8 +44,8 @@ PCM16, 776 KB in total, about 24 s of audio) plus `manifest.jsonl`, one line per
 {"id": "00", "file": "00.vi_short.wav", "text": "anh em", "lang": "vi", "category": "vi_short", "en_words": [], "duration_s": 1.41}
 ```
 
-Categories: 10 × `vi_short` (two-word phrases), 1 × `vi_medium` (seven words), 2 × `en_short`,
-1 × `en_medium` (six words). About 30 reference words. No code-switched audio despite the
+Categories: 10 × `vi_short` (two-word phrases), 1 × `vi_medium` (eight words), 2 × `en_short`,
+1 × `en_medium` (six words). 37 reference words. No code-switched audio despite the
 category names in robo-be; `en_words` is kept so the metric is ready when mixed audio arrives.
 
 The dataset hash is the SHA-256 over the manifest text and every WAV's bytes, and is stamped
@@ -77,7 +77,7 @@ Edit distances come from `jiwer`.
 | Cost per minute | `chirp_3`: USD 0.016 per minute, list price checked 2026-09-29 at cloud.google.com/speech-to-text/pricing; self-hosted: not priced in this round | the architecture doc asks for a `$/min` column |
 
 Every percentage in the report carries its raw counts (`3/30`), and the report opens with the
-caveat that 30 words cannot rank models.
+caveat that 37 words cannot rank models.
 
 **Slices.** Each metric is reported for `all`, per `lang`, per `category`, and for
 `in_domain`: the utterances whose language the system claims to support (see the table
@@ -224,4 +224,4 @@ cp eval/runs/2026-09-29-fixtures/report.md reports/2026-09-29-stt-fixtures.md
 
 TTS evaluation, larger or child datasets, `chirp_2` or other Google models, streaming
 latency, the robo-bridge path, pricing self-hosted GPU time, statistical intervals (no
-meaning on 30 words), and any change to the serving containers or the registry contract.
+meaning on 37 words), and any change to the serving containers or the registry contract.
