@@ -34,6 +34,15 @@ SOURCES = {
 }
 
 
+def _pcm16(wav: bytes) -> bytes:
+    """Re-encode any 16 kHz WAV (FLEURS ships 32-bit float) as 16-bit PCM, the wire format
+    robo-be, the serving containers and Google's WAV auto-decoding all accept."""
+    samples, sr = sf.read(io.BytesIO(wav), dtype="int16")
+    buf = io.BytesIO()
+    sf.write(buf, samples, sr, format="WAV", subtype="PCM_16")
+    return buf.getvalue()
+
+
 def _row(uid: str, file: str, text: str, lang: str, category: str, wav: bytes) -> dict:
     info = sf.info(io.BytesIO(wav))
     return {"id": uid, "file": file, "text": text, "lang": lang, "category": category,
@@ -58,7 +67,7 @@ def build_fleurs(dst: Path, lang: str, tsv: Path, tar: Path) -> list[dict]:
         for member in tf:
             if member.name not in wanted or not member.isfile():
                 continue
-            wav = tf.extractfile(member).read()
+            wav = _pcm16(tf.extractfile(member).read())
             name = Path(member.name).name
             (out_dir / name).write_bytes(wav)
             rows[member.name] = _row(f"fleurs-{lang}-{Path(name).stem}", f"{category}/{name}",

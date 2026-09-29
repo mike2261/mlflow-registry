@@ -9,9 +9,9 @@ import soundfile as sf
 from mlflow_registry.bench import datasets, manifest
 
 
-def _wav(seconds: float) -> bytes:
+def _wav(seconds: float, subtype: str = "PCM_16") -> bytes:
     buf = io.BytesIO()
-    sf.write(buf, np.zeros(int(16_000 * seconds), dtype=np.int16), 16_000, format="WAV", subtype="PCM_16")
+    sf.write(buf, np.zeros(int(16_000 * seconds), dtype=np.float32), 16_000, format="WAV", subtype=subtype)
     return buf.getvalue()
 
 
@@ -31,8 +31,9 @@ def _fleurs(tmp: Path, lang: str) -> tuple[Path, Path]:
         ("1921", "222.wav", "Mặt khác, băng và tuyết.", "mặt khác băng và tuyết", "m ặ t |", "16000", "MALE"),
     ]
     tsv.write_text("\n".join("\t".join(r) for r in rows) + "\n", encoding="utf-8")
-    tar = _tar(tmp / f"fleurs_{lang}.tar.gz", {"test/111.wav": _wav(2.0), "test/222.wav": _wav(1.0),
-                                               "test/999.wav": _wav(0.5)})
+    # real FLEURS WAVs are 32-bit float
+    tar = _tar(tmp / f"fleurs_{lang}.tar.gz", {"test/111.wav": _wav(2.0, "FLOAT"), "test/222.wav": _wav(1.0, "FLOAT"),
+                                               "test/999.wav": _wav(0.5, "FLOAT")})
     return tsv, tar
 
 
@@ -42,7 +43,8 @@ def test_fleurs_rows_use_the_normalized_transcription_and_the_wav_stem_as_id(tmp
     assert [r["id"] for r in rows] == ["fleurs-vi-111", "fleurs-vi-222"]    # same sentence, two speakers
     assert rows[0] == {"id": "fleurs-vi-111", "file": "fleurs_vi/111.wav", "text": "mặt khác băng và tuyết",
                        "lang": "vi", "category": "fleurs_vi", "en_words": [], "duration_s": 2.0}
-    assert (tmp_path / "out" / "fleurs_vi" / "222.wav").exists()
+    written = sf.info(tmp_path / "out" / "fleurs_vi" / "222.wav")
+    assert (written.samplerate, written.channels, written.subtype) == (16_000, 1, "PCM_16")
     assert not (tmp_path / "out" / "fleurs_vi" / "999.wav").exists()      # not in the TSV: not extracted
 
 
