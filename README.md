@@ -359,12 +359,48 @@ Edit the catalog, then `uv run python scripts/gen_compose.py`; a test fails if t
 
 ---
 
+## 5b. Evaluating STT against Google Chirp 3
+
+`mlflow_registry.bench` runs the five STT models (through their serving containers) and
+Google Speech-to-Text v2 `chirp_3` over a fixed dataset, computes **pooled** WER/CER, exact
+match, English-word recall, latency/RTF, failures and `$/min`, writes a Markdown report and
+logs one MLflow run per system and condition to the `eval-stt` experiment. Design:
+`docs/superpowers/specs/2026-09-29-stt-eval-design.md`.
+
+Dataset: `eval/stt-fixtures/` (robo-be's 14 fixture utterances, 37 words, adult/synthetic
+speech). It proves the harness and catches gross failures; it cannot rank models. Swap in a
+bigger set by pointing `--fixtures` at another folder with the same `manifest.jsonl` shape.
+
+```bash
+uv sync --group dev --extra hf --extra bench           # + jiwer, google-cloud-speech
+
+# laptop: Google leg (ADC via `gcloud auth application-default login`; project from gcloud config)
+uv run python scripts/eval_stt.py collect --backend chirp --run eval/runs/2026-09-29-fixtures
+
+# devserver: self-hosted leg (all five STT fit in VRAM together, ~17 GB)
+scripts/serve.sh up qwen3-asr-1.7b granite-speech-4.1-2b gipformer1.5-68m-rnnt parakeet-ctc-0.6b-vietnamese whisper-large-v3
+uv run python scripts/eval_stt.py collect --backend serving --run eval/runs/2026-09-29-fixtures
+scripts/serve.sh down qwen3-asr-1.7b granite-speech-4.1-2b gipformer1.5-68m-rnnt parakeet-ctc-0.6b-vietnamese whisper-large-v3
+rsync -av --exclude run.json devserver:~/mlflow-registry/eval/runs/2026-09-29-fixtures/ eval/runs/2026-09-29-fixtures/
+
+# laptop: score + report + MLflow (tracking URI from .env)
+uv run python scripts/eval_stt.py score --run eval/runs/2026-09-29-fixtures --mlflow
+cp eval/runs/2026-09-29-fixtures/report.md reports/2026-09-29-stt-fixtures.md
+```
+
+Conditions: `hinted` (request carries the utterance language, as the LID router would) for
+every system; `auto` (no hint) for Qwen3-ASR, Whisper and Chirp 3. One warm-up request, then
+three passes; text from pass 1, latency = median. Chirp 3 is GA only in the `us` / `eu`
+multi-regions (`--location`), so its latency includes that hop.
+
+---
+
 ## 6. Development
 
 ```bash
-uv sync --group dev --extra hf       # deps (+ huggingface_hub for hf: specs)
+uv sync --group dev --extra hf --extra bench   # deps (+ huggingface_hub for hf: specs, + bench)
 docker compose up -d                 # local stack
-uv run pytest                        # 45 tests; most hit the live stack and clean up after themselves
+uv run pytest                        # 122 tests; many hit the live stack and clean up after themselves
 uv run mlflow-registry --help
 ```
 
