@@ -389,7 +389,8 @@ cp eval/runs/2026-09-29-fixtures/report.md reports/2026-09-29-stt-fixtures.md
 ```
 
 Conditions: `hinted` (request carries the utterance language, as the LID router would) for
-every system; `auto` (no hint) for Qwen3-ASR, Whisper and Chirp 3. One warm-up request, then
+every system; `auto` (no hint) for Qwen3-ASR and Whisper (open-world detection) and Chirp 3
+(detection restricted to `vi-VN`/`en-US`). One warm-up request, then
 three passes; text from pass 1, latency = median. Chirp 3 is GA only in the `us` / `eu`
 multi-regions (`--location`), so its latency includes that hop.
 

@@ -20,6 +20,10 @@ from mlflow_registry.serving.catalog import SERVING
 
 CHIRP_NAME = "chirp_3"
 CHIRP_LANG_CODES = {"vi": "vi-VN", "en": "en-US"}
+# "auto" condition for Chirp: restricted detection between the two languages the product hears,
+# not open-world detection over every supported language (which misreads 1 s Vietnamese clips
+# as Korean or Chinese).
+CHIRP_AUTO_CODES: tuple[str, ...] = ("vi-VN", "en-US")
 _CHIRP_LANG_BACK = {v.lower(): k for k, v in CHIRP_LANG_CODES.items()}
 
 STT_MODELS: tuple[str, ...] = tuple(s.name for s in SERVING.values() if s.task == "stt")
@@ -168,10 +172,11 @@ class ChirpBackend:
         self._clock = clock
 
     def meta(self) -> dict[str, object]:
-        return {"kind": "chirp", "project": self.project, "location": self.location, "model": self.model}
+        return {"kind": "chirp", "project": self.project, "location": self.location, "model": self.model,
+                "auto_language_codes": list(CHIRP_AUTO_CODES)}
 
     def transcribe(self, wav: bytes, language: str | None) -> Hypothesis:
-        codes = [CHIRP_LANG_CODES[language]] if language else ["auto"]
+        codes = [CHIRP_LANG_CODES[language]] if language else list(CHIRP_AUTO_CODES)
         t0 = self._clock()
         try:
             segments, code = self._recognize(codes, wav)

@@ -24,7 +24,7 @@ This is the "Tier 1" evaluation the v1 ARCHITECTURE.md describes and records as 
 | `gipformer1.5-68m-rnnt` | serving container, port 5003 | vi | no |
 | `parakeet-ctc-0.6b-vietnamese` | serving container, port 5004 | vi | no |
 | `whisper-large-v3` | serving container, port 5005 | vi, en | yes |
-| `chirp_3` | Google Speech-to-Text v2, called directly | vi, en | yes (`language_codes=["auto"]`) |
+| `chirp_3` | Google Speech-to-Text v2, called directly | vi, en | restricted to vi/en (`language_codes=["vi-VN", "en-US"]`) |
 
 The five models are called over the REST contract from the serving spec
 (`POST /invocations`, `audio_b64` + optional `language`). That gives each model its own
@@ -92,7 +92,11 @@ because they show what happens when routing gets it wrong.
   would in production. Every system runs this condition; single-language systems receive
   the hint too and ignore it.
 * `auto`: no language hint. Only systems with auto-detect run it: `qwen3-asr-1.7b`,
-  `whisper-large-v3`, `chirp_3` (`language_codes=["auto"]`).
+  `whisper-large-v3`, `chirp_3`. Chirp 3 gets restricted detection over
+  `["vi-VN", "en-US"]` (decided 2026-09-29 after open-world `["auto"]` read one-second
+  Vietnamese clips as Korean and Chinese). Qwen3-ASR and Whisper keep open-world detection,
+  because the serving contract cannot restrict their language set; the report reads their
+  `auto` rows with that asymmetry in mind.
 
 **Passes.** One warm-up request per system (first utterance, discarded), then three full
 passes over the manifest. Text metrics use pass 1. Latency uses the median of the three.

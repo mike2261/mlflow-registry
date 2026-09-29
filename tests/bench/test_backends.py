@@ -74,7 +74,7 @@ def test_serving_backend_wraps_transport_errors():
         b.transcribe(WAV, "vi")
 
 
-def test_chirp_backend_maps_hint_to_bcp47_and_auto_to_auto():
+def test_chirp_backend_maps_hint_to_bcp47_and_auto_to_vi_en_restricted():
     calls = []
 
     def recognize(codes, content):
@@ -89,11 +89,12 @@ def test_chirp_backend_maps_hint_to_bcp47_and_auto_to_auto():
     assert hyp.latency_s == pytest.approx(0.25)
 
     b.transcribe(WAV, None)
-    assert calls[-1][0] == ["auto"]
+    assert calls[-1][0] == ["vi-VN", "en-US"]   # restricted detection: the product only hears vi/en
     b.transcribe(WAV, "vi")
     assert calls[-1][0] == ["vi-VN"]
     assert b.name == "chirp_3" and b.auto_detect is True
-    assert b.meta() == {"kind": "chirp", "project": "p", "location": "us", "model": "chirp_3"}
+    assert b.meta() == {"kind": "chirp", "project": "p", "location": "us", "model": "chirp_3",
+                        "auto_language_codes": ["vi-VN", "en-US"]}
 
 
 def test_chirp_backend_with_no_results_returns_empty_text_and_unknown_language():
