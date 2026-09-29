@@ -4,6 +4,7 @@ import tarfile
 from pathlib import Path
 
 import numpy as np
+import pytest
 import soundfile as sf
 
 from mlflow_registry.bench import datasets, manifest
@@ -46,6 +47,21 @@ def test_fleurs_rows_use_the_normalized_transcription_and_the_wav_stem_as_id(tmp
     written = sf.info(tmp_path / "out" / "fleurs_vi" / "222.wav")
     assert (written.samplerate, written.channels, written.subtype) == (16_000, 1, "PCM_16")
     assert not (tmp_path / "out" / "fleurs_vi" / "999.wav").exists()      # not in the TSV: not extracted
+
+
+def test_float_audio_keeps_its_signal_when_stored_as_pcm16(tmp_path):
+    t = np.arange(16_000) / 16_000
+    tone = (0.25 * np.sin(2 * np.pi * 440 * t)).astype(np.float32)   # FLEURS-like level, 32-bit float
+    buf = io.BytesIO()
+    sf.write(buf, tone, 16_000, format="WAV", subtype="FLOAT")
+    tsv = tmp_path / "t.tsv"
+    tsv.write_text("1\t1.wav\tRaw.\tnorm\tc\t16000\tMALE\n", encoding="utf-8")
+    tar = _tar(tmp_path / "t.tar.gz", {"test/1.wav": buf.getvalue()})
+    datasets.build_fleurs(tmp_path / "out", "vi", tsv, tar)
+    pcm, sr = sf.read(tmp_path / "out" / "fleurs_vi" / "1.wav", dtype="float32")
+    assert sf.info(tmp_path / "out" / "fleurs_vi" / "1.wav").subtype == "PCM_16"
+    assert np.abs(pcm).max() == pytest.approx(0.25, abs=1e-3)       # not silence, not clipped
+    assert np.abs(pcm - tone).max() < 1e-3
 
 
 def test_vivos_reads_only_the_test_split(tmp_path):

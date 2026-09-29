@@ -37,7 +37,9 @@ SOURCES = {
 def _pcm16(wav: bytes) -> bytes:
     """Re-encode any 16 kHz WAV (FLEURS ships 32-bit float) as 16-bit PCM, the wire format
     robo-be, the serving containers and Google's WAV auto-decoding all accept."""
-    samples, sr = sf.read(io.BytesIO(wav), dtype="int16")
+    # Read as float and let the writer scale to 16-bit. Reading a FLOAT file with
+    # dtype="int16" does not rescale in libsndfile and silently yields all zeros.
+    samples, sr = sf.read(io.BytesIO(wav), dtype="float32")
     buf = io.BytesIO()
     sf.write(buf, samples, sr, format="WAV", subtype="PCM_16")
     return buf.getvalue()
