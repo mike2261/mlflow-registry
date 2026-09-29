@@ -17,7 +17,7 @@ def _rec(system, condition, pass_no, utt, text, latency=0.2, error=None):
     return {"system": system, "condition": condition, "pass": pass_no, "utt": utt.id,
             "lang_hint": None if condition == "auto" else utt.lang, "text": text,
             "language": None, "latency_s": None if error else latency, "error": error,
-            "ts": "t", "backend": {"kind": "fake"}}
+            "ts": "t", "backend": {"kind": "fake"}, "dataset_hash": "sha256:00"}
 
 
 def _gipformer_records():
@@ -124,3 +124,64 @@ def test_render_report_has_required_sections_and_counts(tmp_path):
 
     out = score.write_report(tmp_path / "run", text)
     assert out == tmp_path / "run" / "report.md" and out.read_text(encoding="utf-8") == text
+
+
+def _rewrite(run: Path, name: str, mutate) -> None:
+    path = run / name
+    rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+    rows = [mutate(r) for r in rows]
+    path.write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in rows) + "\n", encoding="utf-8")
+
+
+_META = {"run_id": "r", "dataset": "d", "dataset_hash": "sha256:00", "created": "t"}
+
+
+def test_load_run_refuses_records_collected_on_other_fixtures(tmp_path):
+    run = _write_run(tmp_path)
+    _rewrite(run, "gipformer1.5-68m-rnnt.jsonl", lambda r: {**r, "dataset_hash": "sha256:ff"})
+    with pytest.raises(score.DatasetMismatch, match="gipformer"):
+        score.load_run(run)
+
+
+def test_load_run_refuses_records_without_a_dataset_hash(tmp_path):
+    run = _write_run(tmp_path)
+    _rewrite(run, "chirp_3.jsonl", lambda r: {k: v for k, v in r.items() if k != "dataset_hash"})
+    with pytest.raises(score.DatasetMismatch, match="chirp_3"):
+        score.load_run(run)
+
+
+def test_cell_counts_failed_requests_in_any_pass_and_knows_passes_and_backend(tmp_path):
+    run = _write_run(tmp_path)
+    # pass 2 of utt 00 fails; pass 1 (the scored text) succeeded
+    _rewrite(run, "gipformer1.5-68m-rnnt.jsonl",
+             lambda r: {**r, "text": None, "latency_s": None, "error": "BackendError: 500"}
+             if (r["utt"], r["pass"]) == ("00", 2) else r)
+    _, records = score.load_run(run)
+    gip = next(c for c in score.build_cells(records, UTTS) if c.system == "gipformer1.5-68m-rnnt")
+    assert gip.requests == 9 and gip.failed_requests == 1
+    assert gip.passes == 3
+    assert gip.backend == {"kind": "fake"}
+    assert score.slices(gip)["all"].failures == 0          # utterance-level: pass 1 was fine
+    text = score.render_report(_META, UTTS, [gip], [])
+    row = next(line for line in text.splitlines() if line.startswith("| gipformer1.5-68m-rnnt |"))
+    assert row.rstrip().endswith("| 1/9 |")                # failed requests is the last column
+
+
+def test_report_exact_rate_counts_failures_in_the_denominator(tmp_path):
+    _, records = score.load_run(_write_run(tmp_path))
+    chirp = next(c for c in score.build_cells(records, UTTS) if (c.system, c.condition) == ("chirp_3", "hinted"))
+    text = score.render_report(_META, UTTS, [chirp], [])
+    row = next(line for line in text.splitlines() if line.startswith("| chirp_3 |"))
+    assert "33.3% (1/3)" in row                             # 1 exact of 3 utterances, one of which failed
+
+
+def test_detail_table_shows_detected_language(tmp_path):
+    run = _write_run(tmp_path)
+    _rewrite(run, "chirp_3.jsonl", lambda r: {**r, "language": "ko"} if r["condition"] == "auto" else r)
+    _, records = score.load_run(run)
+    cells = score.build_cells(records, UTTS)
+    chirp_auto = next(c for c in cells if (c.system, c.condition) == ("chirp_3", "auto"))
+    assert chirp_auto.languages == {"00": "ko"}
+    text = score.render_report(_META, UTTS, cells, [])
+    assert "| Utt | Ref | Hyp | Lang | WER | Latency |" in text
+    assert "| 00 | anh em | anh em | ko |" in text

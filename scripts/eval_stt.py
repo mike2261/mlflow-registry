@@ -55,7 +55,6 @@ def parse(argv: list[str]) -> argparse.Namespace:
     s = sub.add_parser("score", help="score a run directory, write report.md, optionally log to MLflow")
     s.add_argument("--run", required=True)
     s.add_argument("--fixtures", default=str(manifest.FIXTURES_DIR))
-    s.add_argument("--passes", type=int, default=3, help="recorded as a param on MLflow runs")
     s.add_argument("--mlflow", action="store_true")
     s.add_argument("--allow-missing-baseline", action="store_true")
     return p.parse_args(argv)
@@ -92,8 +91,7 @@ def cmd_score(args: argparse.Namespace) -> int:
         from mlflow_registry.bench import mlflow_log
         from mlflow_registry.config import load_config
 
-        ids = mlflow_log.log_all(meta, cells, run_dir, tracking_uri=load_config().tracking_uri,
-                                 passes=args.passes)
+        ids = mlflow_log.log_all(meta, cells, run_dir, tracking_uri=load_config().tracking_uri)
         print(f"logged {len(ids)} MLflow runs to experiment {mlflow_log.EXPERIMENT}")
     return 0
 

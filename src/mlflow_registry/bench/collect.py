@@ -62,8 +62,9 @@ def ensure_run(run_dir: Path, fixtures_dir: Path, run_id: str | None = None,
 
 def record(system: str, condition: str, pass_no: int, utt: manifest.Utterance,
            lang_hint: str | None, hyp: Hypothesis | None, error: str | None,
-           ts: str, backend_meta: dict) -> dict:
+           ts: str, backend_meta: dict, dataset_hash: str) -> dict:
     return {
+        "dataset_hash": dataset_hash,
         "system": system,
         "condition": condition,
         "pass": pass_no,
@@ -91,7 +92,9 @@ def _one(backend: Backend, wav: bytes, lang: str | None) -> tuple[Hypothesis | N
 def collect(backend: Backend, fixtures_dir: Path, run_dir: Path, passes: int = 3,
             now: Callable[[], str] = _now, log: Callable[..., None] = print) -> Path:
     fixtures_dir, run_dir = Path(fixtures_dir), Path(run_dir)
-    ensure_run(run_dir, fixtures_dir)
+    # Every record carries the hash of the fixtures it was collected on, so score can refuse a
+    # leg collected elsewhere on different fixtures even when that machine made its own run.json.
+    dataset_hash = ensure_run(run_dir, fixtures_dir)["dataset_hash"]
     utts = manifest.load(fixtures_dir)
     audio = {u.id: manifest.audio_bytes(fixtures_dir, u) for u in utts}
     conditions = [c for c in CONDITIONS if c == "hinted" or backend.auto_detect]
@@ -107,7 +110,8 @@ def collect(backend: Backend, fixtures_dir: Path, run_dir: Path, passes: int = 3
                 for utt in utts:
                     hint = utt.lang if condition == "hinted" else None
                     hyp, error = _one(backend, audio[utt.id], hint)
-                    row = record(backend.name, condition, pass_no, utt, hint, hyp, error, now(), meta)
+                    row = record(backend.name, condition, pass_no, utt, hint, hyp, error, now(), meta,
+                                 dataset_hash)
                     fh.write(json.dumps(row, ensure_ascii=False) + "\n")
                     status = error or f"{hyp.latency_s:.2f}s {hyp.text!r}"
                     log(f"[{backend.name}] {condition} p{pass_no} {utt.id}: {status}")

@@ -28,11 +28,18 @@ def metric_dict(cell: Cell) -> dict[str, float]:
     cost = cost_per_min(cell.system)
     if cost is not None:
         out["cost_usd_per_min"] = cost
+    out["requests"] = float(cell.requests)
+    out["failed_requests"] = float(cell.failed_requests)
     return out
 
 
+def _backend_params(backend: dict) -> dict[str, str]:
+    return {f"backend.{k}": ",".join(map(str, v)) if isinstance(v, (list, tuple)) else str(v)
+            for k, v in backend.items()}
+
+
 def log_run(meta: dict, cell: Cell, run_dir: Path, tracking_uri: str | None = None,
-            experiment: str = EXPERIMENT, passes: int = 3) -> str:
+            experiment: str = EXPERIMENT) -> str:
     if tracking_uri:
         mlflow.set_tracking_uri(tracking_uri)
     mlflow.set_experiment(experiment)
@@ -45,8 +52,9 @@ def log_run(meta: dict, cell: Cell, run_dir: Path, tracking_uri: str | None = No
             "dataset": meta["dataset"],
             "dataset_hash": meta["dataset_hash"],
             "normalizer_version": NORMALIZER_VERSION,
-            "passes": passes,
+            "passes": cell.passes,
             "harness_git_sha": meta.get("harness_git_sha") or "unknown",
+            **_backend_params(cell.backend),
         })
         mlflow.log_metrics(metric_dict(cell))
         for name in (f"{cell.system}.jsonl", "report.md"):
@@ -57,5 +65,5 @@ def log_run(meta: dict, cell: Cell, run_dir: Path, tracking_uri: str | None = No
 
 
 def log_all(meta: dict, cells: list[Cell], run_dir: Path, tracking_uri: str | None = None,
-            experiment: str = EXPERIMENT, passes: int = 3) -> list[str]:
-    return [log_run(meta, c, run_dir, tracking_uri, experiment, passes) for c in cells]
+            experiment: str = EXPERIMENT) -> list[str]:
+    return [log_run(meta, c, run_dir, tracking_uri, experiment) for c in cells]

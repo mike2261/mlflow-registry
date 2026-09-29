@@ -45,7 +45,7 @@ def test_score_end_to_end_on_fake_run(tmp_path):
         "created": "t", "harness_git_sha": "abc"}))
     rows = [{"system": "chirp_3", "condition": "hinted", "pass": 1, "utt": u.id, "lang_hint": u.lang,
              "text": u.text, "language": u.lang, "latency_s": 0.5, "error": None, "ts": "t",
-             "backend": {"kind": "chirp"}} for u in utts]
+             "backend": {"kind": "chirp"}, "dataset_hash": manifest.dataset_hash(fixtures)} for u in utts]
     (run / "chirp_3.jsonl").write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in rows) + "\n")
 
     assert eval_stt.main(["score", "--run", str(run)]) == 0
@@ -69,3 +69,9 @@ def test_collect_main_with_injected_backend(tmp_path, monkeypatch):
     run = tmp_path / "run"
     assert eval_stt.main(["collect", "--backend", "serving", "--run", str(run), "--passes", "1"]) == 0
     assert (run / "whisper-large-v3.jsonl").exists() and (run / "run.json").exists()
+
+
+def test_score_has_no_passes_flag_it_reads_passes_from_the_data():
+    import pytest
+    with pytest.raises(SystemExit):
+        eval_stt.parse(["score", "--run", "r", "--passes", "3"])

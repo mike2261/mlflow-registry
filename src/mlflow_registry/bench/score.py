@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from mlflow_registry.bench.backends import CHIRP_NAME, SYSTEM_LANGS
@@ -21,11 +21,20 @@ class MissingBaseline(RuntimeError):
     """No chirp_3.jsonl in the run directory; pass allow_missing_baseline to override."""
 
 
+class DatasetMismatch(RuntimeError):
+    """A records file was collected on different fixtures than the run's ``run.json`` pins."""
+
+
 @dataclass(frozen=True)
 class Cell:
     system: str
     condition: str
-    rows: list[Scored]
+    rows: list[Scored]                      # one per utterance: pass-1 text, median latency
+    backend: dict = field(default_factory=dict)
+    passes: int = 0
+    requests: int = 0                       # every request over every pass
+    failed_requests: int = 0                # errors or empty text in any pass
+    languages: dict[str, str | None] = field(default_factory=dict)   # utt id -> pass-1 detected language
 
 
 def load_run(run_dir: Path, allow_missing_baseline: bool = False) -> tuple[dict, list[dict]]:
@@ -36,8 +45,15 @@ def load_run(run_dir: Path, allow_missing_baseline: bool = False) -> tuple[dict,
     records: list[dict] = []
     for path in sorted(run_dir.glob("*.jsonl")):
         for line in path.read_text(encoding="utf-8").splitlines():
-            if line.strip():
-                records.append(json.loads(line))
+            if not line.strip():
+                continue
+            rec = json.loads(line)
+            if rec.get("dataset_hash") != meta["dataset_hash"]:
+                raise DatasetMismatch(
+                    f"{path.name} was collected on dataset {rec.get('dataset_hash') or 'unknown'}, "
+                    f"but {RUN_META} pins {meta['dataset_hash']}; recollect that leg on the same fixtures"
+                )
+            records.append(rec)
     return meta, records
 
 
@@ -49,6 +65,7 @@ def build_cells(records: list[dict], utts: list[Utterance]) -> list[Cell]:
     cells: list[Cell] = []
     for (system, condition), per_utt in sorted(grouped.items()):
         rows: list[Scored] = []
+        languages: dict[str, str | None] = {}
         for utt in utts:
             passes = sorted(per_utt.get(utt.id, []), key=lambda r: r["pass"])
             if not passes:
@@ -56,7 +73,16 @@ def build_cells(records: list[dict], utts: list[Utterance]) -> list[Cell]:
             first = passes[0]
             latencies = [p["latency_s"] for p in passes if p["latency_s"] is not None]
             rows.append(scored(utt, first["text"], first["error"], median(latencies)))
-        cells.append(Cell(system, condition, rows))
+            languages[utt.id] = first.get("language")
+        cell_records = [r for recs in per_utt.values() for r in recs]
+        cells.append(Cell(
+            system, condition, rows,
+            backend=dict(cell_records[0].get("backend") or {}),
+            passes=max(r["pass"] for r in cell_records),
+            requests=len(cell_records),
+            failed_requests=sum(1 for r in cell_records if r["error"] is not None),
+            languages=languages,
+        ))
     return cells
 
 
@@ -106,17 +132,19 @@ def _cell(text: str) -> str:
 
 
 def _summary_table(cells: list[Cell]) -> list[str]:
-    lines = ["| System | In-domain WER | CER | Exact | EN recall | Median latency | p90 | RTF | Failures | $/min |",
-             "|---|---|---|---|---|---|---|---|---|---|"]
+    lines = ["| System | In-domain WER | CER | Exact | EN recall | Median latency | p90 | RTF | "
+             "Failed utts (pass 1) | $/min | Failed requests (all passes) |",
+             "|---|---|---|---|---|---|---|---|---|---|---|"]
     for cell in cells:
         sl = slices(cell)
         d, a = sl["in_domain"], sl["all"]
         cost = cost_per_min(cell.system)
         lines.append(
             f"| {cell.system} | {_pct(d.word_edits, d.ref_words)} | {_pct(d.char_edits, d.ref_chars)} | "
-            f"{_pct(d.exact, d.n - d.failures)} | {_pct(a.en_hits, a.en_total)} | {_sec(a.latency_median_s)} | "
+            f"{_pct(d.exact, d.n)} | {_pct(a.en_hits, a.en_total)} | {_sec(a.latency_median_s)} | "
             f"{_sec(a.latency_p90_s)} | {_rate(a.rtf)} | {a.failures}/{a.n} | "
-            f"{'$' + format(cost, '.3f') if cost is not None else '—'} |"
+            f"{'$' + format(cost, '.3f') if cost is not None else '—'} | "
+            f"{cell.failed_requests}/{cell.requests} |"
         )
     return lines
 
@@ -165,11 +193,13 @@ def render_report(meta: dict, utts: list[Utterance], cells: list[Cell],
 
     for cell in cells:
         out += [f"## Detail: {cell.system} ({cell.condition})", "",
-                "| Utt | Ref | Hyp | WER | Latency |", "|---|---|---|---|---|"]
+                "| Utt | Ref | Hyp | Lang | WER | Latency |", "|---|---|---|---|---|---|"]
         for r in cell.rows:
             hyp = f"⚠ {r.error}" if r.failed else (r.hyp or "")
             wer = "n/a" if r.failed else _pct(r.word_edits, r.ref_words)
-            out.append(f"| {r.utt.id} | {_cell(r.utt.text)} | {_cell(hyp)} | {wer} | {_sec(r.latency_s)} |")
+            lang = cell.languages.get(r.utt.id) or "—"
+            out.append(f"| {r.utt.id} | {_cell(r.utt.text)} | {_cell(hyp)} | {lang} | {wer} | "
+                       f"{_sec(r.latency_s)} |")
         out.append("")
 
     out += ["## Non-deterministic outputs", ""]

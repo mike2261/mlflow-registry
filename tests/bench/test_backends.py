@@ -139,3 +139,9 @@ def test_google_recognizer_builds_a_regional_v2_request():
     assert list(req.config.language_codes) == ["vi-VN"]
     assert req.config.model == "chirp_3"
     assert req.content == WAV
+
+
+def test_serving_backend_turns_malformed_prediction_into_backend_error():
+    b = ServingBackend("whisper-large-v3", post=lambda url, payload, timeout: {"predictions": ["anh em"]})
+    with pytest.raises(BackendError):
+        b.transcribe(WAV, "vi")

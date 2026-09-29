@@ -18,7 +18,9 @@ def _cell() -> score.Cell:
     return score.Cell("chirp_3", "hinted", [
         scored(UTTS[0], "anh em", None, 0.9),
         scored(UTTS[1], None, "BackendError: 500", None),
-    ])
+    ], backend={"kind": "chirp", "project": "p", "location": "us", "model": "chirp_3",
+                "auto_language_codes": ["vi-VN", "en-US"]},
+        passes=3, requests=6, failed_requests=3, languages={"00": "vi", "13": None})
 
 
 def test_metric_dict_is_flat_and_skips_none():
@@ -27,6 +29,7 @@ def test_metric_dict_is_flat_and_skips_none():
     assert m["wer_vi"] == 0.0
     assert "wer_en" not in m            # the only en row failed -> no reference words -> None -> dropped
     assert m["cost_usd_per_min"] == pytest.approx(0.016)
+    assert m["failed_requests"] == 3 and m["requests"] == 6
     assert all(isinstance(v, (int, float)) for v in m.values())
 
 
@@ -51,7 +54,7 @@ def test_log_run_writes_params_metrics_and_artifacts(tmp_path, experiment):
             "created": "t", "harness_git_sha": "abc"}
 
     run_id = mlflow_log.log_run(meta, _cell(), run_dir, tracking_uri=tracking_uri,
-                                experiment=exp_name, passes=3)
+                                experiment=exp_name)
 
     client = MlflowClient(tracking_uri=tracking_uri)
     run = client.get_run(run_id)
@@ -60,6 +63,9 @@ def test_log_run_writes_params_metrics_and_artifacts(tmp_path, experiment):
     assert run.data.params["dataset_hash"] == "sha256:00"
     assert run.data.params["normalizer_version"] == mlflow_log.NORMALIZER_VERSION
     assert run.data.params["passes"] == "3"
+    assert run.data.params["backend.kind"] == "chirp"
+    assert run.data.params["backend.location"] == "us"
+    assert run.data.params["backend.auto_language_codes"] == "vi-VN,en-US"
     assert run.data.tags["run_id"] == "r1"
     assert run.data.metrics["in_domain.wer"] == 0.0
     assert run.data.metrics["all.failures"] == 1.0

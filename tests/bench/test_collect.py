@@ -106,3 +106,9 @@ def test_collect_overwrites_previous_file_for_same_system(tmp_path):
     collect.collect(FakeBackend(auto=False), fx, run, passes=1, log=lambda *_: None)
     rows = _read(collect.collect(FakeBackend(auto=False), fx, run, passes=1, log=lambda *_: None))
     assert len(rows) == 2
+
+
+def test_records_carry_the_dataset_hash_of_the_fixtures_they_were_collected_on(tmp_path):
+    fx = _fixtures(tmp_path)
+    rows = _read(collect.collect(FakeBackend(auto=False), fx, tmp_path / "run", passes=1, log=lambda *_: None))
+    assert {r["dataset_hash"] for r in rows} == {manifest.dataset_hash(fx)}

@@ -109,12 +109,12 @@ class ServingBackend:
             out = self._post(url, {"dataframe_records": [record]}, self._timeout)
             latency = self._clock() - t0
             pred = out["predictions"][0]
+            text, language = (pred.get("text") or "").strip(), pred.get("language")
         except BackendError:
             raise
         except Exception as e:  # connection refused, timeout, bad JSON, unexpected payload
             raise BackendError(f"{type(e).__name__}: {e}") from e
-        return Hypothesis(text=(pred.get("text") or "").strip(), language=pred.get("language"),
-                          latency_s=latency)
+        return Hypothesis(text=text, language=language, latency_s=latency)
 
 
 # --- Google Speech-to-Text v2 -------------------------------------------------------------
