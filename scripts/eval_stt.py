@@ -46,6 +46,8 @@ def parse(argv: list[str]) -> argparse.Namespace:
     c.add_argument("--run", required=True, help="run directory, e.g. eval/runs/2026-09-29-fixtures")
     c.add_argument("--fixtures", default=str(manifest.FIXTURES_DIR))
     c.add_argument("--passes", type=int, default=3)
+    c.add_argument("--retry-errors", action="store_true",
+                   help="re-request only the records with an error in an existing run; keep the rest")
     c.add_argument("--concurrency", type=int, default=1,
                    help="parallel requests; keep 1 for self-hosted models so latency is not measured "
                         "under load, raise it for chirp on large datasets")
@@ -94,7 +96,7 @@ def build_backends(args: argparse.Namespace) -> list[Backend]:
 def cmd_collect(args: argparse.Namespace) -> int:
     for backend in build_backends(args):
         out = collect.collect(backend, Path(args.fixtures), Path(args.run), passes=args.passes,
-                              concurrency=args.concurrency)
+                              concurrency=args.concurrency, retry_errors=args.retry_errors)
         print(f"wrote {out}")
     return 0
 

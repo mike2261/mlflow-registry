@@ -145,3 +145,44 @@ def test_serving_backend_turns_malformed_prediction_into_backend_error():
     b = ServingBackend("whisper-large-v3", post=lambda url, payload, timeout: {"predictions": ["anh em"]})
     with pytest.raises(BackendError):
         b.transcribe(WAV, "vi")
+
+
+def test_chirp_backend_waits_and_retries_on_quota_errors():
+    exceptions = pytest.importorskip("google.api_core.exceptions")
+    attempts, sleeps = [], []
+
+    def recognize(codes, content):
+        attempts.append(1)
+        if len(attempts) < 3:
+            raise exceptions.ResourceExhausted("429 Quota exceeded for 'US endpoint Recognize requests'")
+        return (["cảm ơn"], "vi-VN")
+
+    b = ChirpBackend(project="p", recognize=recognize, clock=_fake_clock(), sleep=sleeps.append)
+    hyp = b.transcribe(WAV, "vi")
+    assert hyp.text == "cảm ơn" and len(attempts) == 3
+    assert sleeps == [5.0, 10.0]                     # exponential backoff between attempts
+    assert hyp.latency_s == pytest.approx(0.25)      # only the successful call is timed
+
+
+def test_chirp_backend_gives_up_after_the_last_retry_and_does_not_retry_other_errors():
+    exceptions = pytest.importorskip("google.api_core.exceptions")
+    sleeps = []
+
+    def quota(codes, content):
+        raise exceptions.ResourceExhausted("429 Quota exceeded")
+
+    b = ChirpBackend(project="p", recognize=quota, sleep=sleeps.append, max_retries=3)
+    with pytest.raises(BackendError, match="ResourceExhausted"):
+        b.transcribe(WAV, "vi")
+    assert sleeps == [5.0, 10.0, 20.0]
+
+    calls = []
+
+    def denied(codes, content):
+        calls.append(1)
+        raise exceptions.PermissionDenied("403")
+
+    b = ChirpBackend(project="p", recognize=denied, sleep=sleeps.append)
+    with pytest.raises(BackendError, match="PermissionDenied"):
+        b.transcribe(WAV, "vi")
+    assert len(calls) == 1

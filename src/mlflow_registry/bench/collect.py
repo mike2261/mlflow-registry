@@ -91,7 +91,8 @@ def _one(backend: Backend, wav: bytes, lang: str | None) -> tuple[Hypothesis | N
 
 
 def collect(backend: Backend, fixtures_dir: Path, run_dir: Path, passes: int = 3, concurrency: int = 1,
-            now: Callable[[], str] = _now, log: Callable[..., None] = print) -> Path:
+            retry_errors: bool = False, now: Callable[[], str] = _now,
+            log: Callable[..., None] = print) -> Path:
     fixtures_dir, run_dir = Path(fixtures_dir), Path(run_dir)
     # Every record carries the hash of the fixtures it was collected on, so score can refuse a
     # leg collected elsewhere on different fixtures even when that machine made its own run.json.
@@ -105,6 +106,10 @@ def collect(backend: Backend, fixtures_dir: Path, run_dir: Path, passes: int = 3
         # audio is read per request so a large dataset is never held in memory at once
         hyp, error = _one(backend, manifest.audio_bytes(fixtures_dir, utt), hint)
         return hyp, error, now()
+
+    if retry_errors:
+        return _retry_errors(out, {u.id: u for u in utts}, call, backend.name, meta, dataset_hash,
+                             concurrency, log)
 
     log(f"[{backend.name}] warm-up")
     call(utts[0], utts[0].lang)
@@ -123,4 +128,25 @@ def collect(backend: Backend, fixtures_dir: Path, run_dir: Path, passes: int = 3
                     status = error or f"{hyp.latency_s:.2f}s {hyp.text[:60]!r}"
                     log(f"[{backend.name}] {condition} p{pass_no} {i}/{len(utts)} {utt.id}: {status}")
                 fh.flush()
+    return out
+
+
+def _retry_errors(out: Path, by_id: dict[str, manifest.Utterance], call, system: str, meta: dict,
+                  dataset_hash: str, concurrency: int, log: Callable[..., None]) -> Path:
+    """Re-request only the records of ``out`` that have an error; keep every other record as is."""
+    if not out.exists():
+        raise FileNotFoundError(f"{out} does not exist; run collect without --retry-errors first")
+    rows = [json.loads(line) for line in out.read_text(encoding="utf-8").splitlines() if line.strip()]
+    todo = [i for i, r in enumerate(rows) if r["error"] is not None]
+    log(f"[{system}] retrying {len(todo)} of {len(rows)} records with errors")
+    with ThreadPoolExecutor(max_workers=max(1, concurrency)) as pool:
+        results = pool.map(lambda i: call(by_id[rows[i]["utt"]], rows[i]["lang_hint"]), todo)
+        for n, (i, (hyp, error, ts)) in enumerate(zip(todo, results), 1):
+            old = rows[i]
+            rows[i] = record(system, old["condition"], old["pass"], by_id[old["utt"]], old["lang_hint"],
+                             hyp, error, ts, meta, dataset_hash)
+            log(f"[{system}] retry {n}/{len(todo)} {old['utt']}: {error or 'ok'}")
+    tmp = out.with_suffix(".jsonl.tmp")
+    tmp.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows), encoding="utf-8")
+    tmp.replace(out)
     return out

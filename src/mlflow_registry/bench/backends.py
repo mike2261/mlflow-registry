@@ -153,6 +153,10 @@ def google_recognizer(project: str, location: str, model: str, client=None) -> R
     return recognize
 
 
+def _is_quota_error(e: Exception) -> bool:
+    return type(e).__name__ == "ResourceExhausted" or getattr(e, "code", None) == 429
+
+
 class ChirpBackend:
     def __init__(
         self,
@@ -161,8 +165,14 @@ class ChirpBackend:
         model: str = "chirp_3",
         recognize: Recognize | None = None,
         clock: Callable[[], float] = time.perf_counter,
+        sleep: Callable[[float], None] = time.sleep,
+        max_retries: int = 5,
+        backoff_s: float = 5.0,
     ) -> None:
         self.name = CHIRP_NAME
+        self._sleep = sleep
+        self._max_retries = max_retries
+        self._backoff_s = backoff_s
         self.languages = SYSTEM_LANGS[CHIRP_NAME]
         self.auto_detect = True
         self.project = project
@@ -177,11 +187,19 @@ class ChirpBackend:
 
     def transcribe(self, wav: bytes, language: str | None) -> Hypothesis:
         codes = [CHIRP_LANG_CODES[language]] if language else list(CHIRP_AUTO_CODES)
-        t0 = self._clock()
-        try:
-            segments, code = self._recognize(codes, wav)
-        except Exception as e:
-            raise BackendError(f"{type(e).__name__}: {e}") from e
+        # 429 "Quota exceeded ... requests per minute" is transient: wait and retry with
+        # exponential backoff. Any other error is recorded at once. Only the successful call
+        # is timed, so waiting for quota never shows up as latency.
+        for attempt in range(self._max_retries + 1):
+            t0 = self._clock()
+            try:
+                segments, code = self._recognize(codes, wav)
+                break
+            except Exception as e:
+                if _is_quota_error(e) and attempt < self._max_retries:
+                    self._sleep(self._backoff_s * 2 ** attempt)
+                    continue
+                raise BackendError(f"{type(e).__name__}: {e}") from e
         latency = self._clock() - t0
         text = " ".join(s.strip() for s in segments if s and s.strip()).strip()
         lang = _CHIRP_LANG_BACK.get(code.lower()) or code.split("-")[0].lower() if code else None

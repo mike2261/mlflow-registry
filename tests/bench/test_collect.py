@@ -146,3 +146,27 @@ def test_concurrent_collect_really_overlaps_requests_and_keeps_record_order(tmp_
     assert slow.max_in_flight > 1
     key = lambda r: (r["condition"], r["pass"], r["utt"], r["text"], r["error"])  # noqa: E731
     assert [key(r) for r in par] == [key(r) for r in seq]
+
+
+def test_retry_errors_re_requests_only_failed_records_and_keeps_the_rest(tmp_path):
+    fx = _fixtures(tmp_path)
+    run = tmp_path / "run"
+    first = _read(collect.collect(FakeBackend(auto=True, fail_on={"13"}), fx, run, passes=1, log=lambda *_: None))
+    assert sum(1 for r in first if r["error"]) == 2          # utt 13 in hinted and in auto
+
+    healthy = FakeBackend(auto=True)
+    out = collect.collect(healthy, fx, run, passes=1, retry_errors=True, now=lambda: "later",
+                          log=lambda *_: None)
+    again = _read(out)
+    assert len(healthy.calls) == 2                            # only the two failed records, no warm-up
+    assert [(r["condition"], r["utt"]) for r in again] == [(r["condition"], r["utt"]) for r in first]
+    assert all(r["error"] is None for r in again)
+    kept = [r for r in again if r["utt"] == "00"]
+    assert all(r["ts"] != "later" for r in kept)              # successful records untouched
+    assert {r["ts"] for r in again if r["utt"] == "13"} == {"later"}
+
+
+def test_retry_errors_without_a_previous_file_is_an_error(tmp_path):
+    fx = _fixtures(tmp_path)
+    with pytest.raises(FileNotFoundError):
+        collect.collect(FakeBackend(), fx, tmp_path / "run", retry_errors=True, log=lambda *_: None)
