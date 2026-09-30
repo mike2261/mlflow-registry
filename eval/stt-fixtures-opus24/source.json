@@ -1,0 +1,10 @@
+{
+  "source_dataset": "stt-fixtures",
+  "source_dataset_hash": "sha256:92e4316a0274ecb1188e6c6713166e518944b27a0b12ace5a6e8bf96c37608f6",
+  "codec": "opus",
+  "bitrate": 24000,
+  "application": "voip",
+  "frame_ms": 20,
+  "sample_rate": 16000,
+  "note": "encoded and decoded with opuslib as robo-be's STT clients and server do"
+}

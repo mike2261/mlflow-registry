@@ -22,6 +22,7 @@ mlflow-registry = "mlflow_registry.cli:main"
 
 [project.optional-dependencies]
 hf = ["huggingface_hub>=0.30"]
+bench = ["jiwer>=3.0", "google-cloud-speech>=2.30", "opuslib>=3.0"]
 
 [dependency-groups]
 dev = [

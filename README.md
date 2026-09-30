@@ -359,12 +359,91 @@ Edit the catalog, then `uv run python scripts/gen_compose.py`; a test fails if t
 
 ---
 
+## 5b. Evaluating STT against Google Chirp 3
+
+`mlflow_registry.bench` runs the five STT models (through their serving containers) and
+Google Speech-to-Text v2 `chirp_3` over a fixed dataset, computes **pooled** WER/CER, exact
+match, English-word recall, latency/RTF, failures and `$/min`, writes a Markdown report and
+logs one MLflow run per system and condition to the `eval-stt` experiment. Design:
+`docs/superpowers/specs/2026-09-29-stt-eval-design.md`.
+
+Dataset: `eval/stt-fixtures/` (robo-be's 14 fixture utterances, 37 words, adult/synthetic
+speech). It proves the harness and catches gross failures; it cannot rank models. Swap in a
+bigger set by pointing `--fixtures` at another folder with the same `manifest.jsonl` shape.
+
+```bash
+uv sync --group dev --extra hf --extra bench           # + jiwer, google-cloud-speech, opuslib (needs libopus0)
+
+# laptop: Google leg (ADC via `gcloud auth application-default login`; project from gcloud config)
+uv run python scripts/eval_stt.py collect --backend chirp --run eval/runs/2026-09-29-fixtures
+
+# devserver: self-hosted leg (all five STT fit in VRAM together, ~17 GB)
+scripts/serve.sh up qwen3-asr-1.7b granite-speech-4.1-2b gipformer1.5-68m-rnnt parakeet-ctc-0.6b-vietnamese whisper-large-v3
+uv run python scripts/eval_stt.py collect --backend serving --run eval/runs/2026-09-29-fixtures
+scripts/serve.sh down qwen3-asr-1.7b granite-speech-4.1-2b gipformer1.5-68m-rnnt parakeet-ctc-0.6b-vietnamese whisper-large-v3
+rsync -av --exclude run.json devserver:~/mlflow-registry/eval/runs/2026-09-29-fixtures/ eval/runs/2026-09-29-fixtures/
+
+# laptop: score + report + MLflow (tracking URI from .env)
+uv run python scripts/eval_stt.py score --run eval/runs/2026-09-29-fixtures --mlflow
+cp eval/runs/2026-09-29-fixtures/report.md reports/2026-09-29-stt-fixtures.md
+```
+
+Conditions: `hinted` (request carries the utterance language, as the LID router would) for
+every system; `auto` (no hint) for Qwen3-ASR and Whisper (open-world detection) and Chirp 3
+(detection restricted to `vi-VN`/`en-US`). One warm-up request, then
+three passes; text from pass 1, latency = median. Chirp 3 is GA only in the `us` / `eu`
+multi-regions (`--location`), so its latency includes that hop.
+
+**Metrics shared with robo-be's benchmarks** (`robo-be/benchmarks/stt`, `tts`):
+
+| robo-be | Here | Note |
+|---|---|---|
+| `bench_wer.py` aggregate WER / CER (Σ edits / Σ words) | In-domain WER, CER | same pooling; ours adds Unicode NFC |
+| `bench_stt.py` `wer_mean` | Mean WER | mean of per-utterance WER |
+| `bench_stt.py` code-switch pass rate | CS pass | every expected English word present; vacuously true without English |
+| `bench_stt.py` category winner | Category winners | code-switch dominates, then mean WER; only systems supporting the language compete |
+| `bench_tts.py` mean / median / p95 / min / max | Latency table | p95 by the same linear interpolation |
+| `bench_wer.py` Opus 24 kbps VOIP, 20 ms frames | `eval/stt-fixtures-opus24/` | encoded and decoded offline with `opuslib`, as robo-be's clients and server do |
+
+Not comparable: robo-be times end of speech to final transcript over its streaming WebSocket;
+here latency is one HTTP request for the whole clip (inference plus transfer, no VAD or NATS).
+Split-vs-full mode waits for the t2xx recordings; the code-switch pipeline metrics (language
+tag accuracy, repairs) measure robo-be's router, not a model.
+
+**Public dataset (`public-v1`).** FLEURS Vietnamese and English test splits (CC-BY-4.0, 857 + 647
+read sentences, ~5 h) and the VIVOS test split (CC-BY-NC-SA-4.0, non-commercial, 760 Vietnamese
+read utterances, ~45 min), in one manifest with categories `fleurs_vi`, `fleurs_en`, `vivos_vi`.
+About 1 GB of audio, so it is built locally and gitignored; `source.json` records origin and
+licence. Use one pass and parallel Google requests; keep self-hosted models sequential.
+
+```bash
+uv run python scripts/eval_stt.py datasets                                  # -> eval/datasets/public-v1
+uv run python scripts/eval_stt.py collect --backend chirp --fixtures eval/datasets/public-v1 \
+    --run eval/runs/<id>-public --passes 1 --concurrency 8
+# devserver (rsync eval/datasets/public-v1 first):
+uv run python scripts/eval_stt.py collect --backend serving --fixtures eval/datasets/public-v1 \
+    --run eval/runs/<id>-public --passes 1
+uv run python scripts/eval_stt.py score --run eval/runs/<id>-public --fixtures eval/datasets/public-v1
+```
+
+Large reports list only the 40 worst utterances per system; every hypothesis stays in the JSONL.
+
+```bash
+# Opus condition: build the degraded set once (committed), then collect/score it like any dataset
+uv run python scripts/eval_stt.py opus                  # eval/stt-fixtures -> eval/stt-fixtures-opus24
+uv run python scripts/eval_stt.py collect --backend chirp --fixtures eval/stt-fixtures-opus24 --run eval/runs/<id>-opus24
+# ... serving leg with the same --fixtures on the devserver, then score as above ...
+uv run python scripts/eval_stt.py compare --run clean=eval/runs/<id> --run opus24=eval/runs/<id>-opus24 --out reports/<id>-clean-vs-opus24.md
+```
+
+---
+
 ## 6. Development
 
 ```bash
-uv sync --group dev --extra hf       # deps (+ huggingface_hub for hf: specs)
+uv sync --group dev --extra hf --extra bench   # deps (+ huggingface_hub for hf: specs, + bench)
 docker compose up -d                 # local stack
-uv run pytest                        # 45 tests; most hit the live stack and clean up after themselves
+uv run pytest                        # 158 tests; many hit the live stack and clean up after themselves
 uv run mlflow-registry --help
 ```
 

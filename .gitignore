@@ -10,3 +10,8 @@ mlruns/
 mlartifacts/
 .pytest_cache/
 register.log
+
+# evaluation results (reports worth keeping are copied to reports/)
+eval/runs/
+# public benchmark datasets (built by scripts/eval_stt.py datasets; audio is large and licensed separately)
+eval/datasets/
