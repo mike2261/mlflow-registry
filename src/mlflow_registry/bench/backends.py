@@ -35,9 +35,13 @@ SYSTEM_LANGS: dict[str, frozenset[str]] = {
     "parakeet-ctc-0.6b-vietnamese": frozenset({"vi"}),
     "whisper-large-v3": frozenset({"vi", "en"}),
     "phowhisper-large": frozenset({"vi"}),
+    "cohere-transcribe-03-2026": frozenset({"vi", "en"}),
+    "fun-asr-mlt-nano-2512": frozenset({"vi", "en"}),
     CHIRP_NAME: frozenset({"vi", "en"}),
 }
-AUTO_DETECT: frozenset[str] = frozenset({"qwen3-asr-1.7b", "whisper-large-v3", CHIRP_NAME})
+# Cohere Transcribe needs a language, so it only runs the hinted condition.
+AUTO_DETECT: frozenset[str] = frozenset({"qwen3-asr-1.7b", "whisper-large-v3", "fun-asr-mlt-nano-2512",
+                                         CHIRP_NAME})
 
 
 class BackendError(RuntimeError):

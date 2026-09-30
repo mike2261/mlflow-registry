@@ -1,0 +1,7 @@
+# cohere-transcribe-03-2026: native CohereAsrForConditionalGeneration needs transformers>=5.4 (as in robo-be).
+transformers>=5.4,<6
+accelerate
+sentencepiece
+protobuf
+soundfile
+librosa

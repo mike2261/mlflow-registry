@@ -30,7 +30,7 @@ def test_build_backends_serving_selects_models():
     assert backends[0].host == "h"
 
 
-def test_build_backends_serving_defaults_to_all_five():
+def test_build_backends_serving_defaults_to_every_stt_model():
     args = eval_stt.parse(["collect", "--backend", "serving", "--run", "r"])
     assert [b.name for b in eval_stt.build_backends(args)] == list(eval_stt.STT_MODELS)
 
