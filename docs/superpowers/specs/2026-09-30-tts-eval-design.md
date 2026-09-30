@@ -66,9 +66,9 @@ SHA-256 over the manifest and the reference clip, stamped on every record as in 
 
 `scripts/eval_tts.py collect --backend serving|google --run eval/runs/<id>-tts [--models ...]`
 
-- One request per sentence per system, `passes` default **1** for audio (sampling models are
-  judged on one draw) and `--latency-passes 3` extra timed requests whose audio is discarded, so
-  the median latency is not a single sample. Concurrency 1 for self-hosted systems.
+- One request per sentence per system per pass, `--passes 3` by default. Pass 1 is the judged
+  draw (sampling models are judged on one sample); passes 2..3 are timed only and their audio is
+  discarded, so the median latency is not a single sample. Concurrency 1.
 - Output per system: `<system>.jsonl` (id, pass, latency_s, sample_rate, duration_s, error) and
   `audio/<system>/<id>.wav` (16-bit PCM, the model's native rate, pass 1 only).
 - A request that errors, returns under 0.2 s of audio, or times out (60 s) is a failure; the
@@ -88,12 +88,15 @@ SHA-256 over the manifest and the reference clip, stamped on every record as in 
    their mean.
 2. **Naturalness proxy: UTMOS** (`utmos22_strong` from SpeechMOS, CPU). Trained on English; for
    Vietnamese it is a relative signal between systems only, and the report says so.
-3. **Speaker similarity** for the cloning systems: cosine similarity of ECAPA-TDNN embeddings
-   (`speechbrain/spkrec-ecapa-voxceleb`) between each output and the reference clip. Preset-voice
-   systems get "n/a".
+3. **Speaker similarity** for the cloning systems: cosine similarity of WavLM x-vectors
+   (`microsoft/wavlm-base-plus-sv`, via transformers, which the repo already understands; chosen
+   over speechbrain's ECAPA to avoid its torchaudio version pinning) between each output and the
+   reference clip. Preset-voice systems get "n/a".
 4. **Duration sanity.** Seconds of audio per normalized character, per system and language. An
-   utterance more than 2× or under 0.5× the median across all systems for that sentence is
-   flagged (runaway generation, truncation, skipped clauses). Flags are counted and listed.
+   utterance more than 2× or under 0.5× the median for that sentence is
+   flagged (runaway generation, truncation, skipped clauses). The comparison is against the median
+   of the *other* systems, so it works with two systems as well as five. Flags are counted and
+   listed.
 
 Quality judges run on the devserver next to the containers (they need torch); ASR judges reuse
 the STT backends (containers on the devserver, Chirp from the laptop). Each judge writes its own

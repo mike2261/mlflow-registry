@@ -37,10 +37,10 @@ def _git_sha() -> str | None:
 
 
 def ensure_run(run_dir: Path, fixtures_dir: Path, run_id: str | None = None,
-               git_sha: str | None = None) -> dict:
+               git_sha: str | None = None, hasher: Callable[[Path], str] = manifest.dataset_hash) -> dict:
     run_dir = Path(run_dir)
     meta_path = run_dir / RUN_META
-    current_hash = manifest.dataset_hash(fixtures_dir)
+    current_hash = hasher(fixtures_dir)
     if meta_path.exists():
         meta = json.loads(meta_path.read_text(encoding="utf-8"))
         if meta["dataset_hash"] != current_hash:

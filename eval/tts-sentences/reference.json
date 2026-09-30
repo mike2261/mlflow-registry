@@ -1,0 +1,9 @@
+{
+  "text": "Du khách có thể gặp phải những động vật gây hại mà họ chưa từng thấy ở quê nhà của mình.",
+  "lang": "vi",
+  "source": "FLEURS vi_vn train, file 894467017221550424.wav, speaker 1507 (FEMALE)",
+  "url": "https://huggingface.co/datasets/google/fleurs",
+  "license": "CC-BY-4.0",
+  "processing": "peak-normalized to -3 dBFS, 16 kHz mono PCM16",
+  "duration_s": 7.08
+}
