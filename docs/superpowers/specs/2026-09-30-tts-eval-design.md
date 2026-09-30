@@ -21,7 +21,7 @@ word recall, latency statistics, the serving REST client, and the STT systems as
 |---|---|---|---|
 | `voxcpm2` | serving container, port 5006 | vi, en | clone of the reference clip (`ref_audio_b64` + `ref_text`) |
 | `vieneu-tts-v3-turbo` | serving container, port 5007 | vi (en words via its G2P) | clone of the reference clip (`ref_audio_b64`) |
-| `qwen3-tts-1.7b-base` | serving container, port 5009 | vi, en | clone of the reference clip (`ref_audio_b64` + `ref_text`) |
+| `qwen3-tts-1.7b-base` | serving container, port 5009 | en only (Vietnamese is not in its supported languages; the server rejects it) | clone of the reference clip (`ref_audio_b64` + `ref_text`) |
 | `kokoro-82m` | serving container, port 5008 | en only | preset `af_heart` |
 | `chirp3-hd` | Google Cloud TTS, called directly | vi, en | preset female voice `Aoede`: `vi-VN-Chirp3-HD-Aoede` / `en-US-Chirp3-HD-Aoede` |
 

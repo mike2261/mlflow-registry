@@ -32,7 +32,7 @@ SYSTEM_LANGS: dict[str, frozenset[str]] = {
     "voxcpm2": frozenset({"vi", "en"}),
     "vieneu-tts-v3-turbo": frozenset({"vi"}),
     "kokoro-82m": frozenset({"en"}),
-    "qwen3-tts-1.7b-base": frozenset({"vi", "en"}),
+    "qwen3-tts-1.7b-base": frozenset({"en"}),   # no Vietnamese in its language list
     GOOGLE_NAME: frozenset({"vi", "en"}),
 }
 
