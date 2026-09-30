@@ -51,7 +51,7 @@ def parse(argv: list[str]) -> argparse.Namespace:
     c.add_argument("--concurrency", type=int, default=1,
                    help="parallel requests; keep 1 for self-hosted models so latency is not measured "
                         "under load, raise it for chirp on large datasets")
-    c.add_argument("--models", default=None, help="serving: comma-separated names (default: all five STT)")
+    c.add_argument("--models", default=None, help="serving: comma-separated names (default: every STT model in the catalog)")
     c.add_argument("--host", default="localhost", help="serving: host of the containers")
     c.add_argument("--project", default=None,
                    help="chirp: GCP project (default: $GOOGLE_CLOUD_PROJECT or the active gcloud config)")
