@@ -26,7 +26,13 @@ from eval_stt import _gcloud_project
 
 from mlflow_registry.bench.backends import CHIRP_NAME, STT_MODELS, ChirpBackend, ServingBackend
 from mlflow_registry.bench.tts import collect, judge, manifest, score
-from mlflow_registry.bench.tts.backends import CLONING, TTS_MODELS, GoogleTtsBackend, TtsServingBackend
+from mlflow_registry.bench.tts.backends import (
+    CLONING,
+    TTS_MODELS,
+    ElevenLabsBackend,
+    GoogleTtsBackend,
+    TtsServingBackend,
+)
 
 
 def parse(argv: list[str]) -> argparse.Namespace:
@@ -34,7 +40,7 @@ def parse(argv: list[str]) -> argparse.Namespace:
     sub = p.add_subparsers(dest="cmd", required=True)
 
     c = sub.add_parser("collect", help="synthesize every supported sentence; write JSONL + pass-1 WAVs")
-    c.add_argument("--backend", choices=["serving", "google"], required=True)
+    c.add_argument("--backend", choices=["serving", "google", "elevenlabs"], required=True)
     c.add_argument("--run", required=True, help="run directory, e.g. eval/runs/2026-09-30-tts")
     c.add_argument("--sentences", default=str(manifest.SENTENCES_DIR))
     c.add_argument("--passes", type=int, default=3, help="pass 1 is judged, the rest are timed only")
@@ -71,7 +77,7 @@ def cmd_collect(args: argparse.Namespace) -> int:
         ref = manifest.reference(Path(args.sentences))
         backends = [TtsServingBackend(n, ref, host=args.host) for n in _names(args.models) or TTS_MODELS]
     else:
-        backends = [GoogleTtsBackend()]
+        backends = [GoogleTtsBackend() if args.backend == "google" else ElevenLabsBackend()]
     for backend in backends:
         out = collect.collect(backend, Path(args.sentences), Path(args.run), passes=args.passes)
         print(f"wrote {out}")

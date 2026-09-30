@@ -54,22 +54,34 @@ class Timing:
     chunks: int
 
 
-def time_stream(chunks: Iterable[np.ndarray], sample_rate: int,
+def time_stream(chunks: Iterable[np.ndarray | bytes], sample_rate: int,
                 clock: Callable[[], float] = time.perf_counter) -> Timing:
-    """Consume a chunk iterator; the clock starts before the first ``next()``."""
+    """Consume a chunk iterator; the clock starts before the first ``next()``.
+
+    Chunks are float sample arrays, or ``bytes`` of an encoded (MP3) stream: then the first bytes
+    count as first audio, as a streaming decoder can play the first frame, and the audio length
+    is decoded once the stream ends.
+    """
     t0 = clock()
     first = None
     samples = n = 0
+    encoded = bytearray()
     for chunk in chunks:
         if chunk is None or len(chunk) == 0:
             continue
         if first is None:
             first = clock() - t0
-        samples += len(chunk)
+        if isinstance(chunk, (bytes, bytearray)):
+            encoded += chunk
+        else:
+            samples += len(chunk)
         n += 1
     total = clock() - t0
     if first is None:
         raise RuntimeError("stream produced no audio")
+    if encoded:
+        info = sf.info(io.BytesIO(bytes(encoded)))
+        return Timing(first, total, info.frames / info.samplerate, n)
     return Timing(first, total, samples / sample_rate, n)
 
 
@@ -187,3 +199,11 @@ def google_streamer(voice: str, languages: frozenset[str], lang_codes: dict[str,
 
     return Streamer(name, languages, GOOGLE_STREAM_SR, True, stream,
                     {"kind": "google", "api": "StreamingSynthesize", "voice": voice})
+
+
+# --- ElevenLabs /stream (laptop) ---------------------------------------------------------------
+
+def elevenlabs_streamer(backend) -> Streamer:
+    """``backend`` is a ``bench.tts.backends.ElevenLabsBackend``; chunks are MP3 bytes."""
+    return Streamer(backend.name, backend.languages, 0, True, lambda s: backend.stream_mp3(s.text),
+                    {**backend.meta(), "api": "text-to-speech/stream"})

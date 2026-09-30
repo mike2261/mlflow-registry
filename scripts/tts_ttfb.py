@@ -10,6 +10,7 @@ start the container once first), with the repo mounted at /work:
 Google streams from the laptop (network included):
 
     uv run python scripts/tts_ttfb.py google --run eval/runs/2026-09-30-tts
+    ELEVENLABS_API_KEY=... uv run python scripts/tts_ttfb.py elevenlabs --run eval/runs/2026-09-30-tts
 
 Kept apart from eval_tts.py because the serving images do not ship the scoring dependencies.
 """
@@ -24,6 +25,7 @@ from mlflow_registry.bench.tts.backends import (
     GOOGLE_LANG_CODES,
     GOOGLE_NAME,
     GOOGLE_VOICE,
+    ElevenLabsBackend,
     SYSTEM_LANGS,
     TTS_MODELS,
     VOICING,
@@ -32,7 +34,7 @@ from mlflow_registry.bench.tts.backends import (
 
 def parse(argv: list[str]) -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("where", choices=["local", "google"])
+    p.add_argument("where", choices=["local", "google", "elevenlabs"])
     p.add_argument("--system", choices=TTS_MODELS, help="local: the model this image serves")
     p.add_argument("--weights-version", default="1", help="local: raw weights version the wrapper wraps")
     p.add_argument("--run", required=True)
@@ -44,7 +46,9 @@ def parse(argv: list[str]) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = parse(sys.argv[1:] if argv is None else argv)
     sentences = Path(args.sentences)
-    if args.where == "google":
+    if args.where == "elevenlabs":
+        streamer = ttfb.elevenlabs_streamer(ElevenLabsBackend())
+    elif args.where == "google":
         streamer = ttfb.google_streamer(GOOGLE_VOICE, SYSTEM_LANGS[GOOGLE_NAME], GOOGLE_LANG_CODES, GOOGLE_NAME)
     else:
         if not args.system:
