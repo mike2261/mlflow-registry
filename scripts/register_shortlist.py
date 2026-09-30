@@ -64,6 +64,20 @@ SHORTLIST = [
          "format": "pytorch-bin", "runtime": "transformers",
          "note": "Whisper large fine-tuned on 844 h of Vietnamese (VinAI)"},
     ),
+    Candidate(
+        "cohere-transcribe-03-2026", "hf:CohereLabs/cohere-transcribe-03-2026",
+        {"task": "stt", "languages": "vi,en,multi", "license": "Apache-2.0",
+         "format": "safetensors", "runtime": "transformers>=5.4",
+         "note": "2B; robo-be's English ASR in the LID-routed pipeline; gated (auto-approve) on HF"},
+        {"ignore_patterns": [".eval_results/*", "assets/*", "demo/*"]},
+    ),
+    Candidate(
+        "fun-asr-mlt-nano-2512", "hf:FunAudioLLM/Fun-ASR-MLT-Nano-2512",
+        {"task": "stt", "languages": "vi,en,multi", "license": "Apache-2.0",
+         "format": "pytorch-pt", "runtime": "funasr (+ FunAudioLLM/Fun-ASR repo code)",
+         "note": "0.8B, Qwen3-0.6B decoder; robo-be's vionly/enonly path, auto-detects code-switching"},
+        {"ignore_patterns": ["example/*", "images/*"]},
+    ),
     # --- TTS -------------------------------------------------------------------
     Candidate(
         "voxcpm2", "hf:openbmb/VoxCPM2",

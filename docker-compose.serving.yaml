@@ -380,5 +380,79 @@ services:
               count: 1
               capabilities: [gpu]
 
+  serve-cohere-transcribe-03-2026:
+    image: mlflow-serving/cohere-transcribe-03-2026:latest
+    container_name: mr-serve-cohere-transcribe-03-2026
+    build:
+      context: .
+      dockerfile: serving/Dockerfile.model
+      args:
+        MODEL: cohere-transcribe-03-2026
+    profiles: [cohere-transcribe-03-2026]
+    restart: unless-stopped
+    depends_on:
+      mlflow:
+        condition: service_started
+    environment:
+      SERVING_MODEL_URI: models:/cohere-transcribe-03-2026@serving
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MODEL_CACHE: /models
+      HF_HOME: /models/.hf
+      MLFLOW_SCORING_SERVER_REQUEST_TIMEOUT: "600"
+    volumes:
+      - serving_models:/models
+    ports:
+      - "5011:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 900s
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  serve-fun-asr-mlt-nano-2512:
+    image: mlflow-serving/fun-asr-mlt-nano-2512:latest
+    container_name: mr-serve-fun-asr-mlt-nano-2512
+    build:
+      context: .
+      dockerfile: serving/Dockerfile.model
+      args:
+        MODEL: fun-asr-mlt-nano-2512
+    profiles: [fun-asr-mlt-nano-2512]
+    restart: unless-stopped
+    depends_on:
+      mlflow:
+        condition: service_started
+    environment:
+      SERVING_MODEL_URI: models:/fun-asr-mlt-nano-2512@serving
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MODEL_CACHE: /models
+      HF_HOME: /models/.hf
+      MLFLOW_SCORING_SERVER_REQUEST_TIMEOUT: "600"
+    volumes:
+      - serving_models:/models
+    ports:
+      - "5012:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 900s
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
 volumes:
   serving_models:

@@ -15,7 +15,7 @@ SHORTLIST_NAMES = [
     "qwen3-asr-1.7b", "granite-speech-4.1-2b", "gipformer1.5-68m-rnnt",
     "parakeet-ctc-0.6b-vietnamese", "whisper-large-v3",
     "voxcpm2", "vieneu-tts-v3-turbo", "kokoro-82m", "qwen3-tts-1.7b-base",
-    "phowhisper-large",
+    "phowhisper-large", "cohere-transcribe-03-2026", "fun-asr-mlt-nano-2512",
 ]
 
 
@@ -23,10 +23,9 @@ def test_catalog_covers_exactly_the_shortlisted_models():
     assert list(catalog.SERVING) == SHORTLIST_NAMES
 
 
-def test_ports_are_unique_and_in_the_5001_5010_range():
+def test_ports_are_unique_and_consecutive_from_5001():
     ports = [s.port for s in catalog.SERVING.values()]
-    assert len(set(ports)) == len(ports)
-    assert min(ports) == 5001 and max(ports) == 5010
+    assert sorted(ports) == list(range(5001, 5001 + len(ports)))
 
 
 def test_phowhisper_reuses_the_whisper_wrapper_on_port_5010():

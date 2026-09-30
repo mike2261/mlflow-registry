@@ -4,9 +4,11 @@
 #
 # Installs serving/requirements/<MODEL>.txt (and, if present,
 # serving/requirements/<MODEL>.nodeps.txt with --no-deps for packages whose
-# declared dependencies would drag in a different torch), then this repo's
-# package so the pyfunc wrapper classes are importable. At runtime the
-# container serves models:/<MODEL>@serving straight from the registry.
+# declared dependencies would drag in a different torch), runs
+# serving/requirements/<MODEL>.sh if present (for runtime code that is not a
+# package), then this repo's package so the pyfunc wrapper classes are
+# importable. At runtime the container serves models:/<MODEL>@serving straight
+# from the registry.
 
 ARG BASE_IMAGE=mlflow-serving-base:latest
 FROM ${BASE_IMAGE}
@@ -15,9 +17,10 @@ ARG MODEL
 RUN test -n "${MODEL}" || (echo "build-arg MODEL is required" && exit 1)
 
 WORKDIR /build
-COPY serving/requirements/${MODEL}*.txt ./
+COPY serving/requirements/${MODEL}.* ./
 RUN pip install -r "${MODEL}.txt" \
-    && if [ -f "${MODEL}.nodeps.txt" ]; then pip install --no-deps -r "${MODEL}.nodeps.txt"; fi
+    && if [ -f "${MODEL}.nodeps.txt" ]; then pip install --no-deps -r "${MODEL}.nodeps.txt"; fi \
+    && if [ -f "${MODEL}.sh" ]; then sh "${MODEL}.sh"; fi
 
 COPY pyproject.toml README.md ./
 COPY src ./src

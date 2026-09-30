@@ -1,0 +1,10 @@
+# fun-asr-mlt-nano-2512: funasr runtime + what the Fun-ASR repo's model code imports
+# (its requirements.txt minus torch, which the base image pins, and the Japanese-only pyopenjtalk).
+funasr>=1.3.26
+transformers>=4.51.3,<6
+zhconv
+whisper-normalizer
+openai-whisper
+compute-wer
+soundfile
+librosa

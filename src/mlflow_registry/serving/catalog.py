@@ -70,6 +70,10 @@ SERVING: dict[str, ServingSpec] = {
         # --- added after the first shortlist ----------------------------------
         ServingSpec("phowhisper-large", "stt", f"{_W}.stt_whisper:WhisperStt", 5010,
                     note="Vietnamese only (Whisper large fine-tuned by VinAI)"),
+        ServingSpec("cohere-transcribe-03-2026", "stt", f"{_W}.stt_cohere:CohereTranscribeStt", 5011,
+                    note="language vi/en (defaults to vi); robo-be's English ASR"),
+        ServingSpec("fun-asr-mlt-nano-2512", "stt", f"{_W}.stt_funasr:FunAsrStt", 5012,
+                    note="language vi/en or omit for auto-detect incl. code-switching"),
     ]
 }
 
