@@ -438,6 +438,41 @@ uv run python scripts/eval_stt.py compare --run clean=eval/runs/<id> --run opus2
 
 ---
 
+## 5c. Evaluating TTS against Google Chirp 3 HD
+
+`mlflow_registry.bench.tts` synthesizes `eval/tts-sentences/` (58 tutor sentences: robo-be's 15,
+more Vietnamese, English, Vietnamese–English code-switch, numbers) with the four TTS containers
+and Google Cloud TTS (`vi-VN`/`en-US-Chirp3-HD-Aoede`), then judges the audio:
+
+- **Round-trip WER/CER**: two ASR judges (`qwen3-asr-1.7b` container, Google `chirp_3`) transcribe
+  each clip; scored with the STT normalizer against the closest reading (numbers may be digits or
+  words). A failed synthesis counts as every word deleted.
+- **EN recall** on code-switched sentences, **UTMOS** (English-trained: relative only), **speaker
+  similarity** to the reference clip for the cloning models, **duration flags** (runaway or
+  truncated audio), latency/RTF, Google cost.
+
+Cloning models (voxcpm2, vieneu, qwen3-tts) all copy `eval/tts-sentences/reference.wav`, a female
+FLEURS vi clip (CC-BY-4.0). kokoro-82m and qwen3-tts are English only; vieneu is Vietnamese only.
+Design: `docs/superpowers/specs/2026-09-30-tts-eval-design.md`.
+
+```bash
+uv sync --group dev --extra hf --extra bench [--extra tts-judge]   # tts-judge: torch + transformers for quality
+RUN=eval/runs/<id>-tts
+# laptop: Google leg, then copy the run dir to the devserver
+uv run python scripts/eval_tts.py collect --backend google --run $RUN
+# devserver: all four TTS + the ASR judge fit together (~19 GB)
+scripts/serve.sh up kokoro-82m vieneu-tts-v3-turbo qwen3-tts-1.7b-base voxcpm2 qwen3-asr-1.7b
+uv run python scripts/eval_tts.py collect --backend serving --run $RUN
+uv run python scripts/eval_tts.py asr --judge qwen3-asr-1.7b --run $RUN
+uv run python scripts/eval_tts.py quality --run $RUN --device cuda
+# laptop (after rsync back): Chirp judge, score, MLflow experiment eval-tts
+uv run python scripts/eval_tts.py asr --judge chirp_3 --run $RUN
+uv run python scripts/eval_tts.py score --run $RUN --mlflow
+cp $RUN/report.md reports/<id>-tts.md
+```
+
+---
+
 ## 6. Development
 
 ```bash
