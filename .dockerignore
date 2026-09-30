@@ -1,0 +1,13 @@
+.git
+.venv
+.env
+.claude
+__pycache__
+*.pyc
+.pytest_cache
+tests
+docs
+reports
+mlruns
+mlartifacts
+*.log

@@ -13,6 +13,8 @@ dependencies = [
     "numpy>=2.5.3",
     "python-dotenv>=1.2.3",
     "scikit-learn>=1.9.1",
+    "scipy>=1.18.1",
+    "soundfile>=0.14.0",
 ]
 
 [project.scripts]
@@ -22,7 +24,10 @@ mlflow-registry = "mlflow_registry.cli:main"
 hf = ["huggingface_hub>=0.30"]
 
 [dependency-groups]
-dev = ["pytest>=9"]
+dev = [
+    "pytest>=9",
+    "pyyaml>=6.0.3",
+]
 
 [build-system]
 requires = ["uv_build>=0.12.9,<0.13.0"]

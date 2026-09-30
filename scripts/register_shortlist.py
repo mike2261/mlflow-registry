@@ -58,6 +58,12 @@ SHORTLIST = [
          "role": "baseline"},
         {"allow_patterns": _SAFETENSORS_ONLY},
     ),
+    Candidate(
+        "phowhisper-large", "hf:vinai/PhoWhisper-large",
+        {"task": "stt", "languages": "vi", "license": "BSD-3-Clause",
+         "format": "pytorch-bin", "runtime": "transformers",
+         "note": "Whisper large fine-tuned on 844 h of Vietnamese (VinAI)"},
+    ),
     # --- TTS -------------------------------------------------------------------
     Candidate(
         "voxcpm2", "hf:openbmb/VoxCPM2",

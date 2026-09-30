@@ -1,0 +1,2 @@
+# gipformer1.5-68m-rnnt: Zipformer transducer ONNX bundle, CPU inference (sherpa-onnx ships onnxruntime).
+sherpa-onnx>=1.10

@@ -1,0 +1,4 @@
+# vieneu-tts-v3-turbo: the [cuda] extra pins torch==2.8.0, matching the base image.
+vieneu[cuda]==3.8.3
+transformers==4.57.6
+soundfile

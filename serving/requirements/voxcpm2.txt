@@ -1,0 +1,20 @@
+# voxcpm2: voxcpm itself is installed with --no-deps (see voxcpm2.nodeps.txt) because its
+# declared deps pull torch from PyPI plus gradio/funasr/modelscope we never import.
+transformers>=4.36.2,<5
+accelerate
+einops
+safetensors
+vocos
+encodec
+librosa
+soundfile
+huggingface-hub
+torchcodec
+inflect
+addict
+wetext
+pydantic
+tqdm
+simplejson
+sortedcontainers
+argbind

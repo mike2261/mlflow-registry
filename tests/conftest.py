@@ -1,5 +1,7 @@
 import os
 os.environ.setdefault("MLFLOW_DISABLE_AGENT_HINT", "1")
+os.environ.setdefault("MLFLOW_LOG_UV_FILES", "false")
+os.environ.setdefault("MLFLOW_UV_AUTO_DETECT", "false")
 
 import uuid
 
