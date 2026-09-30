@@ -107,7 +107,7 @@ TTS is where license text, not Elo, determines the shortlist, and Vietnamese TTS
 
 ## Addendum (26 Sep 2026): models surfaced by the robo-be project
 
-A sibling production project (Vietnamese children code-switching with English) evaluated several models in April 2026 that the sections above did not cover. Their current state was re-verified against Hugging Face, GitHub and arXiv on 26 Sep 2026; full notes are in `research_notes/.../robo_be_models_verification.md`.
+A sibling production project (Vietnamese children code-switching with English) evaluated several models in April 2026 that the sections above did not cover. Their current state was re-verified against Hugging Face, GitHub and arXiv on 26 Sep 2026.
 
 Two findings correct the report above:
 
