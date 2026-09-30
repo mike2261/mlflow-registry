@@ -16,6 +16,8 @@ In-domain = utterances in a language the system claims to support. In-domain WER
 | System | In-domain WER | WER, no numbers | Mean WER | CER | Exact | EN recall | CS pass | Median latency | p95 | RTF | Failed utts (pass 1) | $/min | Failed requests (all passes) |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | chirp_3 | 2.7% (1/37) | 2.7% (1/37) | 0.9% | 1.5% (2/134) | 92.9% (13/14) | 100.0% (9/9) | 100.0% (14/14) | 1.67s | 2.03s | 0.92 | 0/14 | $0.016 | 0/42 |
+| cohere-transcribe-03-2026 | 2.7% (1/37) | 2.7% (1/37) | 0.9% | 1.5% (2/134) | 92.9% (13/14) | 100.0% (9/9) | 100.0% (14/14) | 0.09s | 0.13s | 0.05 | 0/14 | — | 0/42 |
+| fun-asr-mlt-nano-2512 | 2.7% (1/37) | 2.7% (1/37) | 0.9% | 1.5% (2/134) | 92.9% (13/14) | 100.0% (9/9) | 100.0% (14/14) | 0.18s | 0.28s | 0.11 | 0/14 | — | 0/42 |
 | gipformer1.5-68m-rnnt | 3.6% (1/28) | 3.6% (1/28) | 1.1% | 2.2% (2/89) | 90.9% (10/11) | 22.2% (2/9) | 78.6% (11/14) | 0.03s | 0.07s | 0.02 | 0/14 | — | 0/42 |
 | granite-speech-4.1-2b | 0.0% (0/9) | 0.0% (0/9) | 0.0% | 0.0% (0/45) | 100.0% (3/3) | 100.0% (9/9) | 100.0% (14/14) | 0.13s | 0.27s | 0.09 | 0/14 | — | 0/42 |
 | parakeet-ctc-0.6b-vietnamese | 14.3% (4/28) | 14.3% (4/28) | 8.0% | 6.7% (6/89) | 81.8% (9/11) | 0.0% (0/9) | 78.6% (11/14) | 0.06s | 0.06s | 0.04 | 0/14 | — | 0/42 |
@@ -30,6 +32,8 @@ Per utterance, median over passes; statistics as in robo-be's bench_tts.py.
 | System | mean | median | p95 | min | max |
 |---|---|---|---|---|---|
 | chirp_3 | 1.57s | 1.67s | 2.03s | 0.87s | 2.40s |
+| cohere-transcribe-03-2026 | 0.09s | 0.09s | 0.13s | 0.08s | 0.14s |
+| fun-asr-mlt-nano-2512 | 0.19s | 0.18s | 0.28s | 0.15s | 0.33s |
 | gipformer1.5-68m-rnnt | 0.04s | 0.03s | 0.07s | 0.02s | 0.11s |
 | granite-speech-4.1-2b | 0.16s | 0.13s | 0.27s | 0.10s | 0.30s |
 | parakeet-ctc-0.6b-vietnamese | 0.06s | 0.06s | 0.06s | 0.06s | 0.07s |
@@ -43,16 +47,18 @@ robo-be rule: among systems that support the category's language, code-switch pa
 
 | Category | Winner |
 |---|---|
-| en_medium | chirp_3 = granite-speech-4.1-2b = qwen3-asr-1.7b = whisper-large-v3 (tie) |
-| en_short | chirp_3 = granite-speech-4.1-2b = qwen3-asr-1.7b = whisper-large-v3 (tie) |
+| en_medium | chirp_3 = cohere-transcribe-03-2026 = fun-asr-mlt-nano-2512 = granite-speech-4.1-2b = qwen3-asr-1.7b = whisper-large-v3 (tie) |
+| en_short | chirp_3 = cohere-transcribe-03-2026 = fun-asr-mlt-nano-2512 = granite-speech-4.1-2b = qwen3-asr-1.7b = whisper-large-v3 (tie) |
 | vi_medium | phowhisper-large |
-| vi_short | chirp_3 = gipformer1.5-68m-rnnt = phowhisper-large = qwen3-asr-1.7b = whisper-large-v3 (tie) |
+| vi_short | chirp_3 = cohere-transcribe-03-2026 = fun-asr-mlt-nano-2512 = gipformer1.5-68m-rnnt = phowhisper-large = qwen3-asr-1.7b = whisper-large-v3 (tie) |
 
 ### WER by language
 
 | System | en | vi |
 |---|---|---|
 | chirp_3 | 0.0% (0/9) | 3.6% (1/28) |
+| cohere-transcribe-03-2026 | 0.0% (0/9) | 3.6% (1/28) |
+| fun-asr-mlt-nano-2512 | 0.0% (0/9) | 3.6% (1/28) |
 | gipformer1.5-68m-rnnt | 88.9% (8/9) | 3.6% (1/28) |
 | granite-speech-4.1-2b | 0.0% (0/9) | 96.4% (27/28) |
 | parakeet-ctc-0.6b-vietnamese | 111.1% (10/9) | 14.3% (4/28) |
@@ -65,6 +71,8 @@ robo-be rule: among systems that support the category's language, code-switch pa
 | System | en_medium | en_short | vi_medium | vi_short |
 |---|---|---|---|---|
 | chirp_3 | 0.0% (0/6) | 0.0% (0/3) | 12.5% (1/8) | 0.0% (0/20) |
+| cohere-transcribe-03-2026 | 0.0% (0/6) | 0.0% (0/3) | 12.5% (1/8) | 0.0% (0/20) |
+| fun-asr-mlt-nano-2512 | 0.0% (0/6) | 0.0% (0/3) | 12.5% (1/8) | 0.0% (0/20) |
 | gipformer1.5-68m-rnnt | 66.7% (4/6) | 133.3% (4/3) | 12.5% (1/8) | 0.0% (0/20) |
 | granite-speech-4.1-2b | 0.0% (0/6) | 0.0% (0/3) | 87.5% (7/8) | 100.0% (20/20) |
 | parakeet-ctc-0.6b-vietnamese | 100.0% (6/6) | 133.3% (4/3) | 37.5% (3/8) | 5.0% (1/20) |
@@ -81,6 +89,7 @@ In-domain = utterances in a language the system claims to support. In-domain WER
 | System | In-domain WER | WER, no numbers | Mean WER | CER | Exact | EN recall | CS pass | Median latency | p95 | RTF | Failed utts (pass 1) | $/min | Failed requests (all passes) |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | chirp_3 | 2.7% (1/37) | 2.7% (1/37) | 0.9% | 1.5% (2/134) | 92.9% (13/14) | 100.0% (9/9) | 100.0% (14/14) | 1.04s | 1.80s | 0.71 | 0/14 | $0.016 | 0/42 |
+| fun-asr-mlt-nano-2512 | 18.9% (7/37) | 18.9% (7/37) | 22.3% | 9.0% (12/134) | 71.4% (10/14) | 100.0% (9/9) | 100.0% (14/14) | 0.18s | 0.28s | 0.11 | 0/14 | — | 0/42 |
 | qwen3-asr-1.7b | 8.1% (3/37) | 8.1% (3/37) | 8.0% | 3.0% (4/134) | 85.7% (12/14) | 100.0% (9/9) | 100.0% (14/14) | 0.22s | 0.32s | 0.14 | 0/14 | — | 0/42 |
 | whisper-large-v3 | 21.6% (8/37) | 21.6% (8/37) | 23.2% | 11.2% (15/134) | 71.4% (10/14) | 100.0% (9/9) | 100.0% (14/14) | 0.31s | 0.48s | 0.20 | 0/14 | — | 0/42 |
 
@@ -91,6 +100,7 @@ Per utterance, median over passes; statistics as in robo-be's bench_tts.py.
 | System | mean | median | p95 | min | max |
 |---|---|---|---|---|---|
 | chirp_3 | 1.20s | 1.04s | 1.80s | 0.87s | 1.88s |
+| fun-asr-mlt-nano-2512 | 0.19s | 0.18s | 0.28s | 0.13s | 0.33s |
 | qwen3-asr-1.7b | 0.23s | 0.22s | 0.32s | 0.19s | 0.37s |
 | whisper-large-v3 | 0.34s | 0.31s | 0.48s | 0.25s | 0.62s |
 
@@ -100,9 +110,9 @@ robo-be rule: among systems that support the category's language, code-switch pa
 
 | Category | Winner |
 |---|---|
-| en_medium | chirp_3 = qwen3-asr-1.7b = whisper-large-v3 (tie) |
-| en_short | chirp_3 = qwen3-asr-1.7b = whisper-large-v3 (tie) |
-| vi_medium | chirp_3 = qwen3-asr-1.7b (tie) |
+| en_medium | chirp_3 = fun-asr-mlt-nano-2512 = qwen3-asr-1.7b = whisper-large-v3 (tie) |
+| en_short | chirp_3 = fun-asr-mlt-nano-2512 = qwen3-asr-1.7b = whisper-large-v3 (tie) |
+| vi_medium | chirp_3 = fun-asr-mlt-nano-2512 = qwen3-asr-1.7b (tie) |
 | vi_short | chirp_3 |
 
 ### WER by language
@@ -110,6 +120,7 @@ robo-be rule: among systems that support the category's language, code-switch pa
 | System | en | vi |
 |---|---|---|
 | chirp_3 | 0.0% (0/9) | 3.6% (1/28) |
+| fun-asr-mlt-nano-2512 | 0.0% (0/9) | 25.0% (7/28) |
 | qwen3-asr-1.7b | 0.0% (0/9) | 10.7% (3/28) |
 | whisper-large-v3 | 0.0% (0/9) | 28.6% (8/28) |
 
@@ -118,6 +129,7 @@ robo-be rule: among systems that support the category's language, code-switch pa
 | System | en_medium | en_short | vi_medium | vi_short |
 |---|---|---|---|---|
 | chirp_3 | 0.0% (0/6) | 0.0% (0/3) | 12.5% (1/8) | 0.0% (0/20) |
+| fun-asr-mlt-nano-2512 | 0.0% (0/6) | 0.0% (0/3) | 12.5% (1/8) | 30.0% (6/20) |
 | qwen3-asr-1.7b | 0.0% (0/6) | 0.0% (0/3) | 12.5% (1/8) | 10.0% (2/20) |
 | whisper-large-v3 | 0.0% (0/6) | 0.0% (0/3) | 25.0% (2/8) | 30.0% (6/20) |
 
@@ -158,6 +170,63 @@ robo-be rule: among systems that support the category's language, code-switch pa
 | 13 | good morning | Good morning. | en | 0.0% (0/2) | 1.05s |
 | 15 | elephant | elephant | en | 0.0% (0/1) | 1.70s |
 | 17 | a rolling stone gathers no moss | A rolling stone gathers no moss. | en | 0.0% (0/6) | 1.84s |
+
+## Detail: cohere-transcribe-03-2026 (hinted)
+
+| Utt | Ref | Hyp | Lang | WER | Latency |
+|---|---|---|---|---|---|
+| 00 | anh em | anh em | vi | 0.0% (0/2) | 0.08s |
+| 01 | buổi sáng | buổi sáng | vi | 0.0% (0/2) | 0.09s |
+| 02 | bánh mì | bánh mì | vi | 0.0% (0/2) | 0.09s |
+| 03 | bác sĩ | bác sĩ | vi | 0.0% (0/2) | 0.09s |
+| 04 | cảm ơn | cảm ơn | vi | 0.0% (0/2) | 0.09s |
+| 05 | cuộc sống | cuộc sống | vi | 0.0% (0/2) | 0.09s |
+| 06 | cái gì | cái gì | vi | 0.0% (0/2) | 0.08s |
+| 07 | cơ hội | cơ hội | vi | 0.0% (0/2) | 0.08s |
+| 08 | chiến đấu | chiến đấu | vi | 0.0% (0/2) | 0.08s |
+| 09 | anh dũng | anh dũng | vi | 0.0% (0/2) | 0.08s |
+| 11 | cộng hoà xã hội chủ nghĩa việt nam | cộng hòa xã hội chủ nghĩa việt nam | vi | 12.5% (1/8) | 0.14s |
+| 13 | good morning | Good morning." | en | 0.0% (0/2) | 0.08s |
+| 15 | elephant | Elephant. | en | 0.0% (0/1) | 0.09s |
+| 17 | a rolling stone gathers no moss | A rolling stone gathers no moss. | en | 0.0% (0/6) | 0.12s |
+
+## Detail: fun-asr-mlt-nano-2512 (auto)
+
+| Utt | Ref | Hyp | Lang | WER | Latency |
+|---|---|---|---|---|---|
+| 00 | anh em | and M | — | 100.0% (2/2) | 0.13s |
+| 01 | buổi sáng | Buổi sáng. | — | 0.0% (0/2) | 0.18s |
+| 02 | bánh mì | Bánh mì. | — | 0.0% (0/2) | 0.20s |
+| 03 | bác sĩ | Backseat. | — | 100.0% (2/2) | 0.15s |
+| 04 | cảm ơn | Cảm ơn. | — | 0.0% (0/2) | 0.21s |
+| 05 | cuộc sống | Cuộc sống. | — | 0.0% (0/2) | 0.18s |
+| 06 | cái gì | Cái gì? | — | 0.0% (0/2) | 0.18s |
+| 07 | cơ hội | Cơ hội. | — | 0.0% (0/2) | 0.18s |
+| 08 | chiến đấu | Chiến đấu. | — | 0.0% (0/2) | 0.18s |
+| 09 | anh dũng | And Jung. | — | 100.0% (2/2) | 0.16s |
+| 11 | cộng hoà xã hội chủ nghĩa việt nam | Cộng hòa xã hội chủ nghĩa Việt Nam. | — | 12.5% (1/8) | 0.33s |
+| 13 | good morning | Good morning." | — | 0.0% (0/2) | 0.15s |
+| 15 | elephant | Elephant. | — | 0.0% (0/1) | 0.15s |
+| 17 | a rolling stone gathers no moss | A rolling stone gathers no moss. | — | 0.0% (0/6) | 0.25s |
+
+## Detail: fun-asr-mlt-nano-2512 (hinted)
+
+| Utt | Ref | Hyp | Lang | WER | Latency |
+|---|---|---|---|---|---|
+| 00 | anh em | Anh em. | vi | 0.0% (0/2) | 0.18s |
+| 01 | buổi sáng | Buổi sáng. | vi | 0.0% (0/2) | 0.18s |
+| 02 | bánh mì | Bánh mì. | vi | 0.0% (0/2) | 0.20s |
+| 03 | bác sĩ | Bác sĩ. | vi | 0.0% (0/2) | 0.18s |
+| 04 | cảm ơn | Cảm ơn. | vi | 0.0% (0/2) | 0.21s |
+| 05 | cuộc sống | Cuộc sống. | vi | 0.0% (0/2) | 0.18s |
+| 06 | cái gì | Cái gì | vi | 0.0% (0/2) | 0.16s |
+| 07 | cơ hội | Cơ hội. | vi | 0.0% (0/2) | 0.18s |
+| 08 | chiến đấu | Chiến đấu! | vi | 0.0% (0/2) | 0.18s |
+| 09 | anh dũng | Anh Dũng. | vi | 0.0% (0/2) | 0.18s |
+| 11 | cộng hoà xã hội chủ nghĩa việt nam | Cộng hòa xã hội chủ nghĩa Việt Nam. | vi | 12.5% (1/8) | 0.33s |
+| 13 | good morning | Good morning. | en | 0.0% (0/2) | 0.15s |
+| 15 | elephant | Elephant. | en | 0.0% (0/1) | 0.15s |
+| 17 | a rolling stone gathers no moss | A rolling stone gathers no moss. | en | 0.0% (0/6) | 0.25s |
 
 ## Detail: gipformer1.5-68m-rnnt (hinted)
 
@@ -313,4 +382,7 @@ robo-be rule: among systems that support the category's language, code-switch pa
 
 ## Non-deterministic outputs
 
-None: every system produced identical text across passes.
+| System | Condition | Utt | Variants |
+|---|---|---|---|
+| fun-asr-mlt-nano-2512 | auto | 13 | 'Good morning."' / 'Good morning.' |
+| fun-asr-mlt-nano-2512 | hinted | 06 | 'Cái gì' / 'Cái gì?' |
