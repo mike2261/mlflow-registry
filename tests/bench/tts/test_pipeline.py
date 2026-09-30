@@ -161,3 +161,22 @@ def test_mlflow_metric_dict(run, sentences_dir):
     assert ma["vi.wer"] == 0.0 and ma["en.wer"] == 0.0 and ma["mix.en_recall"] == 1.0
     assert "en.wer" not in mb and mb["vi.failures"] == 1.0 and mb["failed_requests"] == 2.0
     assert "spk_sim" not in ma                       # fake systems are not cloning systems
+
+
+def test_report_and_metrics_include_ttfb(run, sentences_dir):
+    from mlflow_registry.bench.tts import mlflow_log
+
+    run_dir, _, _ = run
+    (run_dir / "ttfb").mkdir()
+    h = json.loads((run_dir / "run.json").read_text())["dataset_hash"]
+    rows = [{"dataset_hash": h, "system": "sysa", "pass": 1, "sent": "e1", "lang": "en", "streaming": True,
+             "ttfb_s": 0.12, "total_s": 0.9, "audio_s": 1.0, "chunks": 5, "error": None}]
+    (run_dir / "ttfb" / "sysa.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    sents = manifest.load(sentences_dir)
+    loaded = score.load_run(run_dir)
+    results = score.build_results(loaded, sents)
+    text = score.render_report(loaded, sents, results, "r")
+    assert "## Time to first audio (TTFB)" in text
+    assert "| sysa | yes | 0.12s | 0.12s | 0.90s |" in text and "| 0.90 | 5 | 0 |" in text
+    sysa = next(r for r in results if r.system == "sysa")
+    assert mlflow_log.metric_dict(sysa, ["fakejudge"], loaded.ttfb["sysa"])["ttfb_median_s"] == 0.12

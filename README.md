@@ -471,6 +471,19 @@ uv run python scripts/eval_tts.py score --run $RUN --mlflow
 cp $RUN/report.md reports/<id>-tts.md
 ```
 
+**Time to first audio.** The REST containers return whole clips, so TTFB is measured inside each
+model's image through its own streaming API (VoxCPM, VieNeu; kokoro and qwen3-tts have none and
+are timed on a whole clip), and for Google with `StreamingSynthesize`. Run before `score`:
+
+```bash
+# devserver, per model (the container must have started once so its weights are cached)
+docker compose -f docker-compose.yaml -f docker-compose.serving.yaml run --rm --no-deps \
+  -v "$PWD":/work -w /work -e PYTHONPATH=/work/src --entrypoint python \
+  serve-voxcpm2 scripts/tts_ttfb.py local --system voxcpm2 --run $RUN
+# laptop
+uv run python scripts/tts_ttfb.py google --run $RUN
+```
+
 ---
 
 ## 6. Development

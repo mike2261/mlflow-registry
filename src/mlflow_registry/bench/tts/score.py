@@ -17,7 +17,7 @@ from pathlib import Path
 
 from mlflow_registry.bench.collect import RUN_META
 from mlflow_registry.bench.manifest import Utterance
-from mlflow_registry.bench.metrics import Aggregate, Scored, aggregate, en_recall_counts, median, score_text
+from mlflow_registry.bench.metrics import Aggregate, Scored, aggregate, en_recall_counts, median, p95, score_text
 from mlflow_registry.bench.normalize import NORMALIZER_VERSION, normalize
 from mlflow_registry.bench.score import DatasetMismatch, _cell, _frac, _pct, _sec
 from mlflow_registry.bench.tts.backends import CLONING, GOOGLE_NAME
@@ -84,6 +84,7 @@ class Run:
     synth: dict[str, list[dict]]                       # system -> records (all passes)
     asr: dict[str, dict[str, dict[str, dict]]]         # judge -> system -> sent -> record
     quality: dict[str, dict[str, dict]]                # system -> sent -> record
+    ttfb: dict[str, list[dict]] = field(default_factory=dict)   # system -> records (all passes)
 
     @property
     def judges(self) -> list[str]:
@@ -100,7 +101,8 @@ def load_run(run_dir: Path) -> Run:
         asr[p.parent.name][p.stem] = {r["sent"]: r for r in _check(p, _read_jsonl(p), h)}
     quality = {p.stem: {r["sent"]: r for r in _check(p, _read_jsonl(p), h)}
                for p in sorted((run_dir / "quality").glob("*.jsonl"))}
-    return Run(meta, synth, dict(asr), quality)
+    ttfb = {p.stem: _check(p, _read_jsonl(p), h) for p in sorted((run_dir / "ttfb").glob("*.jsonl"))}
+    return Run(meta, synth, dict(asr), quality, ttfb)
 
 
 # --- scoring -----------------------------------------------------------------------------------
@@ -215,6 +217,51 @@ def rows_for(res: Result, lang: str | None = None, category: str | None = None) 
 def speaks(res: Result, lang: str) -> bool:
     """Whether the system was collected on that language (collect skips unsupported ones)."""
     return any(r.sentence.lang == lang for r in res.rows)
+
+
+@dataclass(frozen=True)
+class TtfbSummary:
+    streaming: bool
+    sentences: int
+    errors: int
+    ttfb_median_s: float | None
+    ttfb_p95_s: float | None
+    total_median_s: float | None
+    chunks_median: float | None
+    stream_rtf_max: float | None     # worst sentence: streamed time / audio length; >= 1 means playback stalls
+
+
+def ttfb_summary(records: list[dict]) -> TtfbSummary:
+    """Median over passes per sentence, then median / p95 over sentences (as for latency)."""
+    by_sent: dict[str, list[dict]] = defaultdict(list)
+    for r in records:
+        by_sent[r["sent"]].append(r)
+    firsts, totals, chunks, rtfs, errors = [], [], [], [], 0
+    for recs in by_sent.values():
+        ok = [r for r in recs if r["error"] is None]
+        errors += len(recs) - len(ok)
+        if ok:
+            firsts.append(median([r["ttfb_s"] for r in ok]))
+            totals.append(median([r["total_s"] for r in ok]))
+            chunks.append(median([r["chunks"] for r in ok]))
+            rtfs.append(median([r["total_s"] / r["audio_s"] for r in ok if r.get("audio_s")]) or 0.0)
+    return TtfbSummary(streaming=bool(records and records[0]["streaming"]), sentences=len(by_sent),
+                       errors=errors, ttfb_median_s=median(firsts), ttfb_p95_s=p95(firsts),
+                       total_median_s=median(totals), chunks_median=median(chunks),
+                       stream_rtf_max=max(rtfs) if rtfs else None)
+
+
+def _ttfb_table(run: Run, results: list[Result], judges: list[str]) -> list[str]:
+    rest = {res.system: agg(res.rows, judges[0]).latency_median_s if judges else None for res in results}
+    summaries = sorted(((s, ttfb_summary(r)) for s, r in run.ttfb.items()),
+                       key=lambda kv: (kv[1].ttfb_median_s is None, kv[1].ttfb_median_s or 0))
+    out = ["| System | Streaming | TTFB median | TTFB p95 | Full clip (streamed) | Full clip (REST) | "
+           "Worst stream RTF | Chunks | Errors |", "|---|---|---|---|---|---|---|---|---|"]
+    for system, t in summaries:
+        out.append(f"| {system} | {'yes' if t.streaming else 'no'} | {_sec(t.ttfb_median_s)} | {_sec(t.ttfb_p95_s)} | "
+                   f"{_sec(t.total_median_s)} | {_sec(rest.get(system))} | {_num(t.stream_rtf_max)} | "
+                   f"{_num(t.chunks_median, 0)} | {t.errors} |")
+    return out
 
 
 # --- report ------------------------------------------------------------------------------------
@@ -346,6 +393,15 @@ def render_report(run: Run, sentences: list[Sentence], results: list[Result], ru
               "| Category | Winner |", "|---|---|",
               *[f"| {c} | {', '.join(w)} |" for c, w in winners.items()], "",
               "## Latency", "", *_latency_table(results, judges), ""]
+    if run.ttfb:
+        lines += ["## Time to first audio (TTFB)", "",
+                  "Measured where the model runs, through its own streaming API (Google: StreamingSynthesize "
+                  "from the laptop, network included). Systems without a streaming API are timed on one "
+                  "whole-clip call, so their TTFB is their full latency. Full clip (REST) is the HTTP latency "
+                  "from the tables above. Per sentence the median over passes, then median / p95 over sentences. "
+                  "Worst stream RTF is the slowest sentence's streamed time / audio length: below 1 the stream "
+                  "stays ahead of playback, at 1 or above playback would stall.",
+                  "", *_ttfb_table(run, results, judges), ""]
     flagged = [(res.system, r) for res in results for r in res.rows if r.duration_flag]
     lines += ["## Duration flags", ""]
     lines += ([f"- `{s}` {r.sentence.id}: {r.duration_flag} ({_sec(r.duration_s)})" for s, r in flagged]

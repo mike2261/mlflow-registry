@@ -140,3 +140,15 @@ Unit tests with fake transports and tiny synthetic WAVs, as in `tests/bench/`: m
 collect record shape and failure rules, duration flags, the TTS→ASR judge wiring, scoring and the
 report on a hand-made run directory. UTMOS and ECAPA are called through an injectable scorer so
 tests never download models.
+
+## Addendum (2026-09-30): time to first audio
+
+The REST containers return whole clips, so `collect` latency is time to the complete clip. TTFB
+is measured separately by `scripts/tts_ttfb.py`, which runs inside each model's serving image
+(weights from the serving cache) and times the runtime's own streaming call: VoxCPM
+`generate_streaming`, VieNeu `infer_stream`, and Google `StreamingSynthesize` from the laptop
+(network included). kokoro and qwen3-tts have no audio streaming API in their packages; they are
+timed on one whole-clip call and marked "no streaming". Records go to `ttfb/<system>.jsonl`
+(3 passes); the report adds TTFB median/p95, streamed and REST full-clip time, and the worst
+sentence's stream RTF (≥ 1 means playback would stall). Serving streamed audio over the network
+is out of scope: `mlflow models serve` answers one response per request.

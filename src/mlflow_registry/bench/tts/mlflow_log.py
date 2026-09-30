@@ -16,13 +16,14 @@ from mlflow_registry.bench.tts.score import (
     mean_of,
     rows_for,
     speaks,
+    ttfb_summary,
     wer,
 )
 
 EXPERIMENT = "eval-tts"
 
 
-def metric_dict(res: Result, judges: list[str]) -> dict[str, float]:
+def metric_dict(res: Result, judges: list[str], ttfb_records: list[dict] | None = None) -> dict[str, float]:
     out: dict[str, float] = {}
 
     def put(key: str, value: float | None) -> None:
@@ -51,6 +52,11 @@ def metric_dict(res: Result, judges: list[str]) -> dict[str, float]:
         for f in ("latency_mean_s", "latency_median_s", "latency_p95_s", "latency_min_s", "latency_max_s", "rtf"):
             put(f, getattr(a, f))
     put("cost_usd_per_1k_sentences", cost_per_1k(res.system, [r.sentence for r in res.rows]))
+    if ttfb_records:
+        t = ttfb_summary(ttfb_records)
+        put("ttfb_median_s", t.ttfb_median_s)
+        put("ttfb_p95_s", t.ttfb_p95_s)
+        put("ttfb_stream_total_median_s", t.total_median_s)
     put("requests", res.requests)
     put("failed_requests", res.failed_requests)
     return out
@@ -76,9 +82,9 @@ def log_all(run: Run, results: list[Result], run_dir: Path, tracking_uri: str | 
                 "harness_git_sha": run.meta.get("harness_git_sha") or "unknown",
                 **{f"backend.{k}": str(v) for k, v in res.backend.items()},
             })
-            mlflow.log_metrics(metric_dict(res, run.judges))
+            mlflow.log_metrics(metric_dict(res, run.judges, run.ttfb.get(res.system)))
             for path in [run_dir / f"{res.system}.jsonl", run_dir / "report.md",
-                         run_dir / "quality" / f"{res.system}.jsonl",
+                         run_dir / "quality" / f"{res.system}.jsonl", run_dir / "ttfb" / f"{res.system}.jsonl",
                          *sorted((run_dir / "asr").glob(f"*/{res.system}.jsonl"))]:
                 if path.exists():
                     sub = str(path.parent.relative_to(run_dir)) if path.parent != run_dir else None
